@@ -1,0 +1,132 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
+import datetime
+from ..database import get_db, PortfolioPosition, Notification
+from ..services.stock_service import get_current_price, get_historical_data
+import numpy as np
+
+router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+
+
+class AddPositionRequest(BaseModel):
+    symbol: str
+    name: Optional[str] = None
+    buy_price: float
+    buy_date: str  # ISO date string YYYY-MM-DD
+    quantity: float
+
+
+@router.get("")
+def get_portfolio(db: Session = Depends(get_db)):
+    positions = db.query(PortfolioPosition).all()
+    result = []
+    for p in positions:
+        current_price = get_current_price(p.symbol)
+        if current_price is None:
+            current_price = p.buy_price
+
+        invested = p.buy_price * p.quantity
+        current_value = current_price * p.quantity
+        pnl = current_value - invested
+        pnl_pct = (current_price - p.buy_price) / p.buy_price * 100
+
+        # Performance since buy date
+        performance = {}
+        try:
+            df = get_historical_data(p.symbol, period="2y")
+            if not df.empty:
+                buy_dt = datetime.datetime.strptime(p.buy_date, "%Y-%m-%d")
+                # Align to nearest available date
+                df_since = df[df.index >= buy_dt]
+                if not df_since.empty:
+                    buy_close = float(df_since["Close"].iloc[0])
+                    cur = float(df["Close"].iloc[-1])
+
+                    def pct(days):
+                        if len(df) < days + 1:
+                            return None
+                        return round((cur - float(df["Close"].iloc[-(days + 1)])) / float(df["Close"].iloc[-(days + 1)]) * 100, 2)
+
+                    performance = {
+                        "since_buy": round((cur - buy_close) / buy_close * 100, 2),
+                        "1d": pct(1),
+                        "1w": pct(5),
+                        "1m": pct(21),
+                        "3m": pct(63),
+                        "6m": pct(126),
+                        "1y": pct(252),
+                    }
+        except Exception:
+            pass
+
+        result.append({
+            "id": p.id,
+            "symbol": p.symbol,
+            "name": p.name,
+            "buy_price": p.buy_price,
+            "buy_date": p.buy_date,
+            "quantity": p.quantity,
+            "current_price": round(current_price, 2),
+            "invested": round(invested, 2),
+            "current_value": round(current_value, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round(pnl_pct, 2),
+            "performance": performance,
+        })
+
+    # Portfolio summary
+    total_invested = sum(p["invested"] for p in result)
+    total_value = sum(p["current_value"] for p in result)
+    total_pnl = total_value - total_invested
+    total_pnl_pct = (total_pnl / total_invested * 100) if total_invested > 0 else 0
+
+    return {
+        "positions": result,
+        "summary": {
+            "total_invested": round(total_invested, 2),
+            "total_value": round(total_value, 2),
+            "total_pnl": round(total_pnl, 2),
+            "total_pnl_pct": round(total_pnl_pct, 2),
+            "num_positions": len(result),
+        },
+    }
+
+
+@router.post("/add")
+def add_position(req: AddPositionRequest, db: Session = Depends(get_db)):
+    symbol = req.symbol.upper().strip()
+    existing = db.query(PortfolioPosition).filter(PortfolioPosition.symbol == symbol).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"המניה {symbol} כבר קיימת בתיק")
+
+    # Validate date
+    try:
+        datetime.datetime.strptime(req.buy_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="תאריך לא תקין. השתמש בפורמט YYYY-MM-DD")
+
+    name = req.name or symbol
+    position = PortfolioPosition(
+        symbol=symbol,
+        name=name,
+        buy_price=req.buy_price,
+        buy_date=req.buy_date,
+        quantity=req.quantity,
+    )
+    db.add(position)
+    db.commit()
+    db.refresh(position)
+    return {"message": f"מניה {symbol} נוספה לתיק בהצלחה", "id": position.id}
+
+
+@router.delete("/{symbol}")
+def remove_position(symbol: str, db: Session = Depends(get_db)):
+    symbol = symbol.upper()
+    position = db.query(PortfolioPosition).filter(PortfolioPosition.symbol == symbol).first()
+    if not position:
+        raise HTTPException(status_code=404, detail=f"המניה {symbol} לא נמצאה בתיק")
+    db.delete(position)
+    db.commit()
+    return {"message": f"מניה {symbol} הוסרה מהתיק"}

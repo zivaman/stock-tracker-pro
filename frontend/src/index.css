@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #0a0e1a;
+    color: #e2e8f0;
+    font-family: 'Inter', system-ui, sans-serif;
+    direction: rtl;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #111827;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2d3748;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4a5568;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-[#1a2235] rounded-xl border border-[#2d3748] p-5;
+  }
+
+  .btn-primary {
+    @apply bg-[#00d09c] text-[#0a0e1a] font-semibold px-4 py-2 rounded-lg hover:bg-[#00b589] transition-colors text-sm;
+  }
+
+  .btn-secondary {
+    @apply bg-[#1e2d47] text-[#e2e8f0] font-medium px-4 py-2 rounded-lg hover:bg-[#2d3f5e] transition-colors text-sm border border-[#2d3748];
+  }
+
+  .btn-danger {
+    @apply bg-transparent text-[#ff4757] font-medium px-3 py-1.5 rounded-lg hover:bg-[#ff47571a] transition-colors text-sm border border-[#ff4757];
+  }
+
+  .tag-buy {
+    @apply bg-[#00d09c1a] text-[#00d09c] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#00d09c33];
+  }
+
+  .tag-sell {
+    @apply bg-[#ff47571a] text-[#ff4757] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#ff475733];
+  }
+
+  .tag-watch {
+    @apply bg-[#ffd32a1a] text-[#ffd32a] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#ffd32a33];
+  }
+
+  .tag-neutral {
+    @apply bg-[#94a3b81a] text-[#94a3b8] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#94a3b833];
+  }
+
+  .positive {
+    @apply text-[#00d09c];
+  }
+
+  .negative {
+    @apply text-[#ff4757];
+  }
+}
+
+/* Number font */
+.num {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Pulse animation for live indicator */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.live-dot {
+  animation: pulse-green 2s infinite;
+}
