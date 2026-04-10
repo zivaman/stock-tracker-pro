@@ -5,6 +5,7 @@ from typing import Optional
 import datetime
 from ..database import get_db, PortfolioPosition, Notification
 from ..services.stock_service import get_current_price, get_historical_data
+from ..services.technical_analysis import calculate_indicators, compute_signal
 import numpy as np
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -61,6 +62,32 @@ def get_portfolio(db: Session = Depends(get_db)):
         except Exception:
             pass
 
+        # Technical Analysis for this position
+        ta = {}
+        try:
+            df_ta = get_historical_data(p.symbol, period="1y")
+            if not df_ta.empty and len(df_ta) >= 60:
+                df_ta = df_ta[["Open", "High", "Low", "Close", "Volume"]].copy()
+                if df_ta.index.tz is not None:
+                    df_ta.index = df_ta.index.tz_localize(None)
+                df_ta = calculate_indicators(df_ta)
+                sig_data = compute_signal(df_ta)
+                ta = {
+                    "score": sig_data.get("score"),
+                    "signal": sig_data.get("signal"),
+                    "rsi": sig_data.get("rsi"),
+                    "macd": sig_data.get("macd"),
+                    "macd_signal": sig_data.get("macd_signal"),
+                    "sma50": sig_data.get("sma50"),
+                    "sma200": sig_data.get("sma200"),
+                    "bb_upper": sig_data.get("bb_upper"),
+                    "bb_lower": sig_data.get("bb_lower"),
+                    "reasons": sig_data.get("reasons", []),
+                    "warnings": sig_data.get("warnings", []),
+                }
+        except Exception:
+            pass
+
         result.append({
             "id": p.id,
             "symbol": p.symbol,
@@ -74,6 +101,7 @@ def get_portfolio(db: Session = Depends(get_db)):
             "pnl": round(pnl, 2),
             "pnl_pct": round(pnl_pct, 2),
             "performance": performance,
+            "ta": ta,
         })
 
     # Portfolio summary

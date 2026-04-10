@@ -19,6 +19,19 @@ export interface PortfolioPosition {
     '6m'?: number;
     '1y'?: number;
   };
+  ta?: {
+    score: number;
+    signal: string;
+    rsi: number | null;
+    macd: number | null;
+    macd_signal: number | null;
+    sma50: number | null;
+    sma200: number | null;
+    bb_upper: number | null;
+    bb_lower: number | null;
+    reasons: string[];
+    warnings: string[];
+  };
 }
 
 export interface PortfolioSummary {

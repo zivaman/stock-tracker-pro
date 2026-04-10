@@ -139,6 +139,65 @@ export default function PortfolioCard({ position, onRemove }: Props) {
           ))}
         </div>
       </div>
+
+      {/* TA Mini Panel */}
+      {position.ta && (
+        <div style={{ padding: '0.6rem 1rem', borderTop: '1px solid var(--border)', background: 'var(--card2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: '.6rem', textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', fontWeight: 700 }}>ניתוח טכני</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Score bar */}
+              <div style={{ width: 60, height: 4, background: 'var(--bg)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${position.ta.score}%`,
+                  background: position.ta.score >= 65 ? 'var(--green)' : position.ta.score >= 45 ? 'var(--blue)' : position.ta.score >= 30 ? 'var(--yellow)' : 'var(--red)',
+                  borderRadius: 2
+                }} />
+              </div>
+              <span className="num" style={{
+                fontSize: '.75rem', fontWeight: 800,
+                color: position.ta.score >= 65 ? 'var(--green)' : position.ta.score >= 45 ? 'var(--blue)' : position.ta.score >= 30 ? 'var(--yellow)' : 'var(--red)'
+              }}>{position.ta.score}</span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+            {[
+              {
+                label: 'RSI',
+                value: position.ta.rsi?.toFixed(1) ?? '—',
+                color: position.ta.rsi == null ? 'var(--text2)' : position.ta.rsi < 35 ? 'var(--green)' : position.ta.rsi > 70 ? 'var(--red)' : 'var(--text2)'
+              },
+              {
+                label: 'MACD',
+                value: position.ta.macd != null && position.ta.macd_signal != null
+                  ? (position.ta.macd > position.ta.macd_signal ? '▲' : '▼')
+                  : '—',
+                color: position.ta.macd != null && position.ta.macd_signal != null
+                  ? (position.ta.macd > position.ta.macd_signal ? 'var(--green)' : 'var(--red)')
+                  : 'var(--text2)'
+              },
+              {
+                label: 'SMA50',
+                value: position.ta.sma50 ? (position.current_price > position.ta.sma50 ? '▲' : '▼') : '—',
+                color: position.ta.sma50
+                  ? (position.current_price > position.ta.sma50 ? 'var(--green)' : 'var(--red)')
+                  : 'var(--text2)'
+              },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ background: 'var(--bg)', borderRadius: 6, padding: '4px 6px', textAlign: 'center' }}>
+                <div style={{ fontSize: '.58rem', color: 'var(--muted)', marginBottom: 1 }}>{label}</div>
+                <div className="num" style={{ fontSize: '.78rem', fontWeight: 700, color }}>{value}</div>
+              </div>
+            ))}
+          </div>
+          {position.ta.reasons.length > 0 && (
+            <p style={{ fontSize: '.65rem', color: 'var(--green)', marginTop: 5, display: 'flex', alignItems: 'flex-start', gap: 3 }}>
+              <span>✓</span> {position.ta.reasons[0]}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

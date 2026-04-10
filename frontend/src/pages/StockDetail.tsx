@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, ExternalLink, Globe, TrendingUp, TrendingDown,
@@ -194,6 +194,101 @@ function CompanyDetails({ details, info }: { details: any; info: any }) {
   );
 }
 
+/* ─── Market hours helper (US Eastern) ─── */
+function getMarketStatus(): { open: boolean; label: string; color: string } {
+  const now = new Date();
+  // Convert to US Eastern time
+  const etStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const et = new Date(etStr);
+  const day = et.getDay(); // 0=Sun, 6=Sat
+  const h = et.getHours(); const m = et.getMinutes();
+  const mins = h * 60 + m;
+  if (day === 0 || day === 6) return { open: false, label: 'שוק סגור (סוף שבוע)', color: 'var(--muted)' };
+  if (mins >= 570 && mins < 960) return { open: true, label: 'שוק פתוח 🟢', color: 'var(--green)' }; // 9:30–16:00
+  if (mins >= 480 && mins < 570) return { open: false, label: 'טרום מסחר', color: 'var(--yellow)' };
+  if (mins >= 960 && mins < 1200) return { open: false, label: 'מסחר after-hours', color: 'var(--yellow)' };
+  return { open: false, label: 'שוק סגור', color: 'var(--muted)' };
+}
+
+/* ─── Live Watch Component ─── */
+function LiveWatch({ onRefresh, lastRefresh }: { onRefresh: () => void; lastRefresh: Date | null }) {
+  const INTERVAL = 20 * 60; // 20 minutes in seconds
+  const [live, setLive] = useState(false);
+  const [countdown, setCountdown] = useState(INTERVAL);
+  const market = getMarketStatus();
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!live) { if (timerRef.current) clearInterval(timerRef.current); return; }
+    setCountdown(INTERVAL);
+    timerRef.current = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) { onRefresh(); return INTERVAL; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [live]);
+
+  const mins = Math.floor(countdown / 60);
+  const secs = countdown % 60;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0.6rem 1rem', background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10, flexWrap: 'wrap' }}>
+      {/* Market status */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: market.color, display: 'inline-block', animation: market.open && live ? 'pulse 1.5s infinite' : 'none' }} />
+        <span style={{ fontSize: '.75rem', fontWeight: 600, color: market.color }}>{market.label}</span>
+      </div>
+
+      <div style={{ width: 1, height: 18, background: 'var(--border)' }} />
+
+      {/* Live toggle */}
+      <button
+        onClick={() => setLive(v => !v)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '5px 14px', borderRadius: 8, cursor: 'pointer',
+          border: `1px solid ${live ? 'var(--green)' : 'var(--border)'}`,
+          background: live ? 'rgba(0,200,150,.1)' : 'var(--bg2)',
+          color: live ? 'var(--green)' : 'var(--text2)',
+          fontSize: '.78rem', fontWeight: 700, transition: 'all .15s'
+        }}
+      >
+        {live ? (
+          <>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', animation: 'pulse 1s infinite' }} />
+            מעקב חי פעיל
+          </>
+        ) : (
+          <>▷ הפעל מעקב חי</>
+        )}
+      </button>
+
+      {/* Countdown */}
+      {live && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: '.72rem', color: 'var(--muted)' }}>עדכון בעוד:</span>
+          <span className="num" style={{ fontSize: '.85rem', fontWeight: 800, color: 'var(--text)', background: 'var(--bg2)', padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)' }}>
+            {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+          </span>
+        </div>
+      )}
+
+      {/* Manual refresh */}
+      <button onClick={onRefresh} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', color: 'var(--text2)', fontSize: '.72rem' }}>
+        <RefreshCw size={12} /> רענן עכשיו
+      </button>
+
+      {lastRefresh && (
+        <span style={{ fontSize: '.68rem', color: 'var(--muted)', marginRight: 'auto' }}>
+          עדכון אחרון: {lastRefresh.toLocaleTimeString('he-IL')}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function StockDetailPage() {
   const { symbol } = useParams<{ symbol: string }>();
   const navigate = useNavigate();
@@ -203,6 +298,7 @@ export default function StockDetailPage() {
   const [activeTab, setActiveTab] = useState<'chart' | 'analysis' | 'info'>('chart');
   const [addingZiv, setAddingZiv] = useState(false);
   const [zivAdded, setZivAdded] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const fetchData = async () => {
     if (!symbol) return;
@@ -210,7 +306,7 @@ export default function StockDetailPage() {
     try {
       const detail = await getStockDetail(symbol);
       if (detail.error) setError(detail.error);
-      else setData(detail);
+      else { setData(detail); setLastRefresh(new Date()); }
     } catch (err: any) {
       setError(err.message || 'שגיאה בטעינת נתוני המניה');
     } finally { setLoading(false); }
@@ -274,11 +370,17 @@ export default function StockDetailPage() {
 
   return (
     <div className="space-y-5">
-      <button onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-sm transition-colors hover:opacity-70"
-        style={{ color: 'var(--text-secondary)' }}>
-        <ArrowRight size={16} /> חזור
-      </button>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <button onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-sm transition-colors hover:opacity-70"
+          style={{ color: 'var(--text2)' }}>
+          <ArrowRight size={16} /> חזור
+        </button>
+        <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text)', fontFamily: "'JetBrains Mono', monospace" }}>{symbol}</span>
+      </div>
+
+      {/* Live watch bar */}
+      <LiveWatch onRefresh={fetchData} lastRefresh={lastRefresh} />
 
       {/* Header card */}
       <div className="card">
