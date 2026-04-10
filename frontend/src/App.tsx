@@ -5,6 +5,7 @@ import Portfolio from './pages/Portfolio';
 import Radar from './pages/Radar';
 import StockDetail from './pages/StockDetail';
 import ZivIndex from './pages/ZivIndex';
+import Search from './pages/Search';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
             <Route path="/radar" element={<Radar />} />
             <Route path="/stock/:symbol" element={<StockDetail />} />
             <Route path="/ziv-index" element={<ZivIndex />} />
+            <Route path="/search" element={<Search />} />
           </Routes>
         </Layout>
       </BrowserRouter>

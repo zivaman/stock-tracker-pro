@@ -1,7 +1,7 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Bell, Sun, Moon, ScanLine, DollarSign,
-  Briefcase, Radar, BarChart2
+  Briefcase, Radar, BarChart2, Search
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getNotifications, markAllRead, scanPortfolio, getCurrencies } from '../api/client';
@@ -97,6 +97,44 @@ function NotifPanel({ notifications, show, onClose }: {
   );
 }
 
+/* ─── Quick Search Bar ─── */
+function QuickSearch() {
+  const navigate = useNavigate();
+  const [val, setVal] = useState('');
+  const [focused, setFocused] = useState(false);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const s = val.trim().toUpperCase();
+    if (s) { navigate(`/search?q=${s}`); setVal(''); }
+  };
+
+  return (
+    <form onSubmit={submit} style={{ position: 'relative' }}>
+      <Search size={13} style={{
+        position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)',
+        color: focused ? 'var(--blue)' : 'var(--muted)', pointerEvents: 'none'
+      }} />
+      <input
+        type="text"
+        value={val}
+        onChange={e => setVal(e.target.value.toUpperCase())}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="חפש מניה..."
+        style={{
+          background: 'var(--card2)',
+          border: `1px solid ${focused ? 'var(--blue)' : 'var(--border)'}`,
+          borderRadius: 8, padding: '0.32rem 1.8rem 0.32rem 0.7rem',
+          color: 'var(--text)', fontSize: '.75rem', outline: 'none',
+          width: 150, transition: 'all .15s', direction: 'rtl',
+          fontFamily: "'JetBrains Mono', monospace",
+        }}
+      />
+    </form>
+  );
+}
+
 /* ─── Main Navbar ─── */
 function Navbar({ notifications, onScan, scanning }: {
   notifications: Notification[];
@@ -131,10 +169,17 @@ function Navbar({ notifications, onScan, scanning }: {
           <BarChart2 size={15} />
           <span>מדד זיו</span>
         </NavLink>
+        <NavLink to="/search" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <Search size={15} />
+          <span>חיפוש מניה</span>
+        </NavLink>
       </div>
 
       {/* Right controls */}
       <div className="navbar-right">
+        {/* Quick search */}
+        <QuickSearch />
+
         {/* Scan */}
         <button onClick={onScan} disabled={scanning} className="btn btn-sm btn-ghost flex items-center gap-1.5">
           {scanning
