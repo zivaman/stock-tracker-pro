@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Minus, ChevronLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, Flame } from 'lucide-react';
 import type { RadarStock } from '../types';
 
 interface Props {
@@ -7,133 +7,121 @@ interface Props {
   rank: number;
 }
 
-const signalConfig = {
-  strong_buy: { label: 'קנייה חזקה', cls: 'bg-[#00d09c] text-[#0a0e1a]' },
-  buy: { label: 'קנייה', cls: 'tag-buy' },
-  watch: { label: 'מעקב', cls: 'tag-watch' },
-  neutral: { label: 'ניטראלי', cls: 'tag-neutral' },
-  sell: { label: 'מכירה', cls: 'tag-sell' },
+const SIGNAL_CFG: Record<string, { label: string; color: string; bg: string }> = {
+  strong_buy: { label: '🔥 קנייה חזקה', color: 'var(--green)',  bg: 'rgba(0,200,150,.15)' },
+  buy:        { label: '▲ קנייה',       color: 'var(--green)',  bg: 'rgba(0,200,150,.1)' },
+  watch:      { label: '◎ מעקב',        color: 'var(--yellow)', bg: 'rgba(245,197,24,.1)' },
+  neutral:    { label: '— ניטראלי',     color: 'var(--text2)',  bg: 'rgba(143,163,191,.1)' },
+  sell:       { label: '▼ מכירה',       color: 'var(--red)',    bg: 'rgba(240,64,96,.1)' },
 };
 
-function formatMarketCap(mc: number | null): string {
-  if (!mc) return 'N/A';
+function fmt(mc: number | null): string {
+  if (!mc) return '—';
   if (mc >= 1e12) return `$${(mc / 1e12).toFixed(1)}T`;
-  if (mc >= 1e9) return `$${(mc / 1e9).toFixed(1)}B`;
-  if (mc >= 1e6) return `$${(mc / 1e6).toFixed(0)}M`;
-  return `$${mc}`;
+  if (mc >= 1e9)  return `$${(mc / 1e9).toFixed(1)}B`;
+  return `$${(mc / 1e6).toFixed(0)}M`;
 }
 
 export default function RadarCard({ stock, rank }: Props) {
   const navigate = useNavigate();
-  const cfg = signalConfig[stock.signal] || signalConfig.neutral;
-  const isPositiveDay = (stock.day_change ?? 0) >= 0;
+  const cfg = SIGNAL_CFG[stock.signal] ?? SIGNAL_CFG.neutral;
+  const dayPos = (stock.day_change ?? 0) >= 0;
+  const scoreColor = stock.score >= 65 ? 'var(--green)' : stock.score >= 45 ? 'var(--blue)' : stock.score >= 30 ? 'var(--yellow)' : 'var(--red)';
 
   return (
-    <div
-      className="card hover:border-[#3d4f6a] transition-all cursor-pointer group"
-      onClick={() => navigate(`/stock/${stock.symbol}`)}
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <span className="w-8 h-8 rounded-lg bg-[#1e2d47] flex items-center justify-center text-sm font-bold text-[#94a3b8]">
-            {rank}
-          </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-white text-lg">{stock.symbol}</h3>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cfg.cls}`}>
-                {cfg.label}
-              </span>
-            </div>
-            <p className="text-xs text-[#94a3b8] mt-0.5 truncate max-w-[200px]">{stock.name}</p>
-          </div>
-        </div>
-        <ChevronLeft size={16} className="text-[#475569] group-hover:text-[#94a3b8] transition-colors" />
-      </div>
-
-      {/* Price & Change */}
-      <div className="flex items-end justify-between mb-3">
+    <div className="stock-card" onClick={() => navigate(`/stock/${stock.symbol}`)}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
-          <p className="text-2xl font-bold num text-white">${stock.current_price}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={`flex items-center gap-1 text-sm font-medium num ${isPositiveDay ? 'positive' : 'negative'}`}>
-              {isPositiveDay ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              {isPositiveDay ? '+' : ''}{stock.day_change?.toFixed(2) ?? '0.00'}%
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Rank badge */}
+            <span style={{
+              width: 22, height: 22, borderRadius: 6,
+              background: 'var(--bg2)', color: 'var(--muted)',
+              fontSize: '.68rem', fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0
+            }}>{rank}</span>
+            <span style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--text)', letterSpacing: '-.5px' }}>
+              {stock.symbol}
             </span>
-            <span className="text-xs text-[#475569]">יום</span>
+            {stock.hot_signal && <Flame size={14} style={{ color: 'var(--yellow)' }} />}
           </div>
-        </div>
-
-        {/* Score Bar */}
-        <div className="text-right">
-          <p className="text-xs text-[#64748b] mb-1">ציון טכני</p>
-          <div className="flex items-center gap-2">
-            <div className="w-24 h-2 rounded-full bg-[#1e2d47] overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${stock.score}%`,
-                  background: stock.score >= 65 ? '#00d09c' : stock.score >= 45 ? '#3498db' : stock.score >= 30 ? '#ffd32a' : '#ff4757',
-                }}
-              />
-            </div>
-            <span className="text-sm font-bold num text-white">{stock.score}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Indicators Row */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
-        <div className="bg-[#111827] rounded-lg px-2 py-1.5 text-center">
-          <p className="text-[10px] text-[#64748b]">RSI</p>
-          <p className={`text-sm font-bold num ${
-            stock.rsi && stock.rsi < 35 ? 'text-[#00d09c]' : stock.rsi && stock.rsi > 70 ? 'text-[#ff4757]' : 'text-white'
-          }`}>{stock.rsi?.toFixed(1) ?? 'N/A'}</p>
-        </div>
-        <div className="bg-[#111827] rounded-lg px-2 py-1.5 text-center">
-          <p className="text-[10px] text-[#64748b]">MACD</p>
-          <p className={`text-sm font-bold num ${
-            stock.macd && stock.macd_signal && stock.macd > stock.macd_signal ? 'text-[#00d09c]' : 'text-[#ff4757]'
-          }`}>
-            {stock.macd && stock.macd_signal
-              ? stock.macd > stock.macd_signal ? '▲ חיובי' : '▼ שלילי'
-              : 'N/A'}
+          <p style={{ fontSize: '.68rem', color: 'var(--text2)', marginTop: 2, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {stock.name}
           </p>
         </div>
-        <div className="bg-[#111827] rounded-lg px-2 py-1.5 text-center">
-          <p className="text-[10px] text-[#64748b]">Cap</p>
-          <p className="text-sm font-bold num text-white">{formatMarketCap(stock.market_cap)}</p>
+        {/* Signal badge */}
+        <span style={{
+          fontSize: '.66rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+          color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.color}55`,
+          whiteSpace: 'nowrap', flexShrink: 0
+        }}>
+          {cfg.label}
+        </span>
+      </div>
+
+      {/* Price */}
+      <div>
+        <p className="num" style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', lineHeight: 1, letterSpacing: '-1px' }}>
+          ${stock.current_price}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+          {dayPos ? <TrendingUp size={12} style={{ color: 'var(--green)' }} /> : <TrendingDown size={12} style={{ color: 'var(--red)' }} />}
+          <span className="num" style={{ fontSize: '.75rem', fontWeight: 700, color: dayPos ? 'var(--green)' : 'var(--red)' }}>
+            {dayPos ? '+' : ''}{stock.day_change?.toFixed(2) ?? '0.00'}%
+          </span>
+          <span style={{ fontSize: '.65rem', color: 'var(--muted)' }}>יום</span>
         </div>
       </div>
 
-      {/* Hot signal banner */}
-      {stock.hot_signal && (
-        <div className="rounded-lg px-3 py-2 mb-2 flex items-center gap-2 text-xs font-semibold" style={{ background: '#ffd32a15', border: '1px solid #ffd32a40', color: '#ffd32a' }}>
-          <span className="text-base">🔥</span>
-          <span>{stock.hot_signal}</span>
+      {/* Score bar */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ fontSize: '.62rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>ציון טכני</span>
+          <span className="num" style={{ fontSize: '.9rem', fontWeight: 800, color: scoreColor }}>{stock.score}</span>
         </div>
-      )}
+        <div style={{ height: 5, borderRadius: 4, background: 'var(--bg2)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${stock.score}%`, background: scoreColor, borderRadius: 4, transition: 'width .4s' }} />
+        </div>
+      </div>
 
-      {/* Top reason */}
-      {stock.reasons.length > 0 && (
-        <p className="text-xs text-[#00d09c] flex items-start gap-1">
-          <span>✓</span> {stock.reasons[0]}
-        </p>
-      )}
-      {stock.reasons.length === 0 && stock.warnings.length > 0 && (
-        <p className="text-xs text-[#ff4757] flex items-start gap-1">
-          <span>⚠</span> {stock.warnings[0]}
-        </p>
-      )}
+      {/* Indicators */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 5 }}>
+        {[
+          { label: 'RSI', value: stock.rsi?.toFixed(1) ?? '—', color: stock.rsi && stock.rsi < 35 ? 'var(--green)' : stock.rsi && stock.rsi > 70 ? 'var(--red)' : 'var(--text)' },
+          { label: 'MACD', value: stock.macd && stock.macd_signal ? (stock.macd > stock.macd_signal ? '▲' : '▼') : '—', color: stock.macd && stock.macd_signal ? (stock.macd > stock.macd_signal ? 'var(--green)' : 'var(--red)') : 'var(--text2)' },
+          { label: 'Cap', value: fmt(stock.market_cap), color: 'var(--text)' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ background: 'var(--bg2)', borderRadius: 7, padding: '0.35rem 0.2rem', textAlign: 'center' }}>
+            <p style={{ fontSize: '.58rem', color: 'var(--muted)', marginBottom: 2 }}>{label}</p>
+            <p className="num" style={{ fontSize: '.78rem', fontWeight: 700, color }}>{value}</p>
+          </div>
+        ))}
+      </div>
 
-      {/* Sector */}
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1e2d47] text-[#64748b]">
-          {stock.sector !== 'N/A' ? stock.sector : 'General'}
-        </span>
-        {stock.beta && (
-          <span className="text-[10px] text-[#64748b]">β {stock.beta}</span>
-        )}
+      {/* Top reason or hot signal */}
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+        {stock.hot_signal ? (
+          <p style={{ fontSize: '.72rem', color: 'var(--yellow)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            🔥 {stock.hot_signal}
+          </p>
+        ) : stock.reasons.length > 0 ? (
+          <p style={{ fontSize: '.72rem', color: 'var(--green)', display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+            <span>✓</span> {stock.reasons[0]}
+          </p>
+        ) : stock.warnings.length > 0 ? (
+          <p style={{ fontSize: '.72rem', color: 'var(--yellow)', display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+            <span>⚠</span> {stock.warnings[0]}
+          </p>
+        ) : null}
+        {/* Sector + Beta */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+          <span style={{ fontSize: '.62rem', color: 'var(--muted)', background: 'var(--bg2)', padding: '1px 7px', borderRadius: 999 }}>
+            {stock.sector && stock.sector !== 'N/A' ? stock.sector : 'General'}
+          </span>
+          {stock.beta && <span style={{ fontSize: '.62rem', color: 'var(--muted)' }}>β {stock.beta}</span>}
+        </div>
       </div>
     </div>
   );

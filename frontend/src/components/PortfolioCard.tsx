@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Trash2, ChevronLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trash2, ArrowUpRight } from 'lucide-react';
 import type { PortfolioPosition } from '../types';
 
 interface Props {
@@ -7,127 +7,117 @@ interface Props {
   onRemove: (symbol: string) => void;
 }
 
-type Period = 'since_buy' | '1d' | '1w' | '1m' | '3m' | '6m' | '1y';
-const PERIODS: { key: Period; label: string }[] = [
-  { key: 'since_buy', label: 'מהכניסה' },
-  { key: '1d', label: 'יום' },
-  { key: '1w', label: 'שבוע' },
-  { key: '1m', label: 'חודש' },
-  { key: '3m', label: '3 חודשים' },
-  { key: '6m', label: '6 חודשים' },
-  { key: '1y', label: 'שנה' },
-];
-
-function PeriodBadge({ label, value }: { label: string; value: number | undefined }) {
-  if (value == null) return null;
-  const isPos = value >= 0;
-  return (
-    <div className="text-center">
-      <p className="text-[9px] text-[#64748b] mb-0.5">{label}</p>
-      <p className={`text-xs font-bold num ${isPos ? 'text-[#00d09c]' : 'text-[#ff4757]'}`}>
-        {isPos ? '+' : ''}{value.toFixed(2)}%
-      </p>
-    </div>
-  );
-}
-
 export default function PortfolioCard({ position, onRemove }: Props) {
   const navigate = useNavigate();
   const isPnlPos = position.pnl >= 0;
+  const pnlColor = isPnlPos ? 'var(--green)' : 'var(--red)';
+  const pnlBg   = isPnlPos ? 'rgba(0,200,150,.08)' : 'rgba(240,64,96,.08)';
+
+  const periods: { key: keyof typeof position.performance; label: string }[] = [
+    { key: '1d',   label: '1D' },
+    { key: '1w',   label: '1W' },
+    { key: '1m',   label: '1M' },
+    { key: '3m',   label: '3M' },
+    { key: '6m',   label: '6M' },
+    { key: '1y',   label: '1Y' },
+  ];
 
   return (
-    <div className="card group">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div
-          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
-          onClick={() => navigate(`/stock/${position.symbol}`)}
-        >
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-white text-xl">{position.symbol}</h3>
-              {isPnlPos
-                ? <TrendingUp size={16} className="text-[#00d09c]" />
-                : <TrendingDown size={16} className="text-[#ff4757]" />
-              }
-            </div>
-            <p className="text-xs text-[#94a3b8] mt-0.5">{position.name}</p>
+    <div
+      className="stock-card"
+      onClick={() => navigate(`/stock/${position.symbol}`)}
+      style={{ cursor: 'pointer' }}
+    >
+      {/* Top row: symbol + delete */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontWeight: 800, fontSize: '1.25rem', color: 'var(--text)', letterSpacing: '-0.5px' }}>
+              {position.symbol}
+            </span>
+            {isPnlPos
+              ? <TrendingUp size={14} style={{ color: 'var(--green)' }} />
+              : <TrendingDown size={14} style={{ color: 'var(--red)' }} />}
+            <ArrowUpRight size={12} style={{ color: 'var(--muted)' }} />
           </div>
+          <p style={{ fontSize: '.7rem', color: 'var(--text2)', marginTop: 1, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {position.name}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate(`/stock/${position.symbol}`)}
-            className="text-[#64748b] hover:text-white transition-colors"
-            title="ניתוח טכני"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <button
-            onClick={() => {
-              if (confirm(`האם למחוק את ${position.symbol} מהתיק?`)) {
-                onRemove(position.symbol);
-              }
-            }}
-            className="text-[#475569] hover:text-[#ff4757] transition-colors"
-            title="הסר מהתיק"
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
+        <button
+          onClick={e => {
+            e.stopPropagation();
+            if (confirm(`האם למחוק את ${position.symbol} מהתיק?`)) onRemove(position.symbol);
+          }}
+          style={{ color: 'var(--muted)', padding: '2px', background: 'none', border: 'none', cursor: 'pointer' }}
+          title="הסר מהתיק"
+        >
+          <Trash2 size={13} />
+        </button>
       </div>
 
-      {/* P&L */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-[#111827] rounded-xl p-3">
-          <p className="text-xs text-[#64748b] mb-1">מחיר נוכחי</p>
-          <p className="text-xl font-bold num text-white">${position.current_price}</p>
-          <p className="text-xs text-[#64748b] mt-1">כניסה: ${position.buy_price}</p>
-        </div>
-        <div className={`rounded-xl p-3 ${isPnlPos ? 'bg-[#00d09c0d]' : 'bg-[#ff47570d]'}`}>
-          <p className="text-xs text-[#64748b] mb-1">רווח / הפסד</p>
-          <p className={`text-xl font-bold num ${isPnlPos ? 'text-[#00d09c]' : 'text-[#ff4757]'}`}>
+      {/* Current price */}
+      <div>
+        <p style={{ fontSize: '.65rem', color: 'var(--muted)', marginBottom: 2 }}>מחיר נוכחי</p>
+        <p className="num" style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-1px', lineHeight: 1 }}>
+          ${position.current_price}
+        </p>
+        <p style={{ fontSize: '.7rem', color: 'var(--text2)', marginTop: 3 }}>
+          כניסה: <span className="num">${position.buy_price}</span>
+        </p>
+      </div>
+
+      {/* P&L box */}
+      <div style={{ background: pnlBg, border: `1px solid ${isPnlPos ? 'rgba(0,200,150,.2)' : 'rgba(240,64,96,.2)'}`, borderRadius: 8, padding: '0.6rem 0.75rem' }}>
+        <p style={{ fontSize: '.6rem', color: 'var(--muted)', marginBottom: 2 }}>רווח / הפסד</p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span className="num" style={{ fontSize: '1.1rem', fontWeight: 800, color: pnlColor }}>
             {isPnlPos ? '+' : ''}${position.pnl.toFixed(2)}
-          </p>
-          <p className={`text-xs font-medium num mt-1 ${isPnlPos ? 'text-[#00d09c]' : 'text-[#ff4757]'}`}>
+          </span>
+          <span className="num" style={{ fontSize: '.78rem', fontWeight: 700, color: pnlColor }}>
             {isPnlPos ? '+' : ''}{position.pnl_pct.toFixed(2)}%
-          </p>
+          </span>
         </div>
       </div>
 
-      {/* Portfolio Details */}
-      <div className="grid grid-cols-3 gap-2 mb-4 text-center">
-        <div>
-          <p className="text-[10px] text-[#64748b]">כמות</p>
-          <p className="text-sm font-medium num text-white">{position.quantity}</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-[#64748b]">השקעה</p>
-          <p className="text-sm font-medium num text-white">${position.invested.toFixed(0)}</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-[#64748b]">שווי נוכחי</p>
-          <p className="text-sm font-medium num text-white">${position.current_value.toFixed(0)}</p>
-        </div>
+      {/* Details row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, textAlign: 'center' }}>
+        {[
+          { label: 'כמות', value: `${position.quantity}` },
+          { label: 'השקעה', value: `$${position.invested.toFixed(0)}` },
+          { label: 'שווי', value: `$${position.current_value.toFixed(0)}` },
+        ].map(({ label, value }) => (
+          <div key={label} style={{ background: 'var(--bg2)', borderRadius: 6, padding: '0.35rem 0.2rem' }}>
+            <p style={{ fontSize: '.6rem', color: 'var(--muted)' }}>{label}</p>
+            <p className="num" style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text)', marginTop: 1 }}>{value}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Performance by period */}
-      <div className="border-t border-[#2d3748] pt-3">
-        <p className="text-[10px] text-[#64748b] mb-2 uppercase tracking-wider">ביצועים לפי תקופה</p>
-        <div className="grid grid-cols-7 gap-1">
-          {PERIODS.map(({ key, label }) => (
-            <PeriodBadge
-              key={key}
-              label={label}
-              value={position.performance[key]}
-            />
-          ))}
+      {/* Period performance */}
+      <div>
+        <p style={{ fontSize: '.6rem', color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>ביצועים</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 3 }}>
+          {periods.map(({ key, label }) => {
+            const val = position.performance[key];
+            if (val == null) return (
+              <div key={key} style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '.55rem', color: 'var(--muted)' }}>{label}</p>
+                <p style={{ fontSize: '.65rem', color: 'var(--muted)' }}>—</p>
+              </div>
+            );
+            const pos = val >= 0;
+            return (
+              <div key={key} style={{ textAlign: 'center' }}>
+                <p style={{ fontSize: '.55rem', color: 'var(--muted)' }}>{label}</p>
+                <p className="num" style={{ fontSize: '.65rem', fontWeight: 700, color: pos ? 'var(--green)' : 'var(--red)' }}>
+                  {pos ? '+' : ''}{val.toFixed(1)}%
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
-
-      {/* Buy date */}
-      <p className="text-[10px] text-[#475569] mt-2">
-        תאריך כניסה: {new Date(position.buy_date).toLocaleDateString('he-IL')}
-      </p>
     </div>
   );
 }
