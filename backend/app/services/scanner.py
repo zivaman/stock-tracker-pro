@@ -90,6 +90,31 @@ def score_stock(symbol: str) -> Dict[str, Any]:
               abs(macd_val - macd_sig_val) < 0.05 * abs(macd_val)):
             hot_signal = "חציית MACD זה עתה — איתות חם! שקול כניסה"
 
+        # Additional fundamental fields
+        description = (info.get("longBusinessSummary", "") or "")[:200]
+        pe_ratio = safe_val(info.get("trailingPE"))
+        target_price = safe_val(info.get("targetMeanPrice"))
+        analyst_rec = info.get("recommendationKey", "")
+        analyst_count = safe_val(info.get("numberOfAnalystOpinions"))
+        w52_high = safe_val(info.get("fiftyTwoWeekHigh"))
+        w52_low = safe_val(info.get("fiftyTwoWeekLow"))
+        avg_volume = safe_val(info.get("averageVolume"))
+        volume = safe_val(info.get("volume"))
+
+        # Period performance
+        def _perf(n: int):
+            try:
+                if len(df) <= n:
+                    return None
+                return round((float(df["Close"].iloc[-1]) - float(df["Close"].iloc[-n])) / float(df["Close"].iloc[-n]) * 100, 2)
+            except Exception:
+                return None
+
+        perf_1m = _perf(21)
+        perf_3m = _perf(63)
+        perf_6m = _perf(126)
+        perf_1y = _perf(min(252, len(df) - 1)) if len(df) > 1 else None
+
         return {
             "symbol": symbol,
             "name": name,
@@ -110,6 +135,19 @@ def score_stock(symbol: str) -> Dict[str, Any]:
             "day_change": day_chg,
             "week_change": week_chg,
             "hot_signal": hot_signal,
+            "description": description,
+            "pe_ratio": pe_ratio,
+            "target_price": target_price,
+            "analyst_rec": analyst_rec,
+            "analyst_count": analyst_count,
+            "52w_high": w52_high,
+            "52w_low": w52_low,
+            "avg_volume": avg_volume,
+            "volume": volume,
+            "perf_1m": perf_1m,
+            "perf_3m": perf_3m,
+            "perf_6m": perf_6m,
+            "perf_1y": perf_1y,
         }
     except Exception as e:
         logger.warning(f"Failed to score {symbol}: {e}")

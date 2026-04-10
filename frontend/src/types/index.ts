@@ -49,6 +49,19 @@ export interface RadarStock {
   day_change: number | null;
   week_change: number | null;
   hot_signal: string | null;
+  description: string;
+  pe_ratio: number | null;
+  target_price: number | null;
+  analyst_rec: string;
+  analyst_count: number | null;
+  '52w_high': number | null;
+  '52w_low': number | null;
+  avg_volume: number | null;
+  volume: number | null;
+  perf_1m: number | null;
+  perf_3m: number | null;
+  perf_6m: number | null;
+  perf_1y: number | null;
 }
 
 export interface PricePoint {

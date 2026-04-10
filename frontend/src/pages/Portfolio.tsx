@@ -224,7 +224,7 @@ export default function Portfolio() {
           </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
           {positions.map(p => (
             <PortfolioCard key={p.symbol} position={p} onRemove={handleRemove} />
           ))}

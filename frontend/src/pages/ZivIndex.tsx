@@ -18,17 +18,35 @@ interface Summary {
 
 function AccuracyCard({ label, data }: { label: string; data: { total: number; success: number; accuracy: number | null } }) {
   const acc = data.accuracy;
-  const color = acc == null ? 'var(--text-muted)' : acc >= 60 ? 'var(--green)' : acc >= 40 ? 'var(--yellow)' : 'var(--red)';
+  const color = acc == null ? 'var(--muted)' : acc >= 60 ? 'var(--green)' : acc >= 40 ? 'var(--yellow)' : 'var(--red)';
+  const fail = data.total - data.success;
   return (
-    <div className="card text-center">
-      <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <p className="text-3xl font-black num" style={{ color }}>
+    <div className="card" style={{ textAlign: 'center' }}>
+      <p style={{ fontSize: '.65rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>{label}</p>
+      {/* Big % */}
+      <p className="num" style={{ fontSize: '2.2rem', fontWeight: 900, color, lineHeight: 1 }}>
         {acc != null ? `${acc}%` : '—'}
       </p>
-      <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{data.success}/{data.total} הצלחות</p>
+      {/* Absolute values */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 6 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="num" style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--green)' }}>{data.success}</div>
+          <div style={{ fontSize: '.6rem', color: 'var(--muted)' }}>הצלחות</div>
+        </div>
+        <div style={{ width: 1, background: 'var(--border)', margin: '2px 0' }} />
+        <div style={{ textAlign: 'center' }}>
+          <div className="num" style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--red)' }}>{fail}</div>
+          <div style={{ fontSize: '.6rem', color: 'var(--muted)' }}>כישלונות</div>
+        </div>
+        <div style={{ width: 1, background: 'var(--border)', margin: '2px 0' }} />
+        <div style={{ textAlign: 'center' }}>
+          <div className="num" style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text2)' }}>{data.total}</div>
+          <div style={{ fontSize: '.6rem', color: 'var(--muted)' }}>סה"כ</div>
+        </div>
+      </div>
       {acc != null && (
-        <div className="mt-2 rounded-full h-1.5 overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
-          <div className="h-full rounded-full" style={{ width: `${acc}%`, background: color }} />
+        <div style={{ marginTop: 8, borderRadius: 4, height: 5, overflow: 'hidden', background: 'rgba(240,64,96,.15)' }}>
+          <div style={{ height: '100%', width: `${acc}%`, background: color, borderRadius: 4, transition: 'width .5s' }} />
         </div>
       )}
     </div>
@@ -168,7 +186,7 @@ export default function ZivIndex() {
                   <th className="px-4 py-3 text-right">סיגנל</th>
                   <th className="px-4 py-3 text-right">מחיר המלצה</th>
                   <th className="px-4 py-3 text-right">מחיר בדיקה</th>
-                  <th className="px-4 py-3 text-right">שינוי %</th>
+                  <th className="px-4 py-3 text-right">שינוי % (מוחלט)</th>
                   <th className="px-4 py-3 text-right">TA</th>
                   <th className="px-4 py-3 text-right">תוצאה</th>
                   <th className="px-4 py-3 text-right">תאריך</th>

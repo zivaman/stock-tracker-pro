@@ -148,7 +148,7 @@ export default function Radar() {
           <p style={{ color: 'var(--text2)', fontSize: '.82rem', marginTop: 6 }}>נסה פילטר אחר או רענן</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
           {filtered.map((stock, i) => (
             <RadarCard key={stock.symbol} stock={stock} rank={i + 1} />
           ))}
