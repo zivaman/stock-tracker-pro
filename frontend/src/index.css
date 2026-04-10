@@ -2,89 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== DARK MODE (default) ===== */
+:root {
+  --bg-primary:    #0a0e1a;
+  --bg-secondary:  #111827;
+  --bg-card:       #1a2235;
+  --bg-hover:      #1e2d47;
+  --border:        #2d3748;
+  --text-primary:  #e2e8f0;
+  --text-secondary:#94a3b8;
+  --text-muted:    #64748b;
+  --green:         #00d09c;
+  --red:           #ff4757;
+  --yellow:        #ffd32a;
+  --blue:          #3498db;
+  --header-bg:     #0d1526;
+}
+
+/* ===== LIGHT MODE ===== */
+html.light {
+  --bg-primary:    #f0f4f8;
+  --bg-secondary:  #ffffff;
+  --bg-card:       #ffffff;
+  --bg-hover:      #e8edf5;
+  --border:        #d1dbe8;
+  --text-primary:  #1a2235;
+  --text-secondary:#4a5568;
+  --text-muted:    #718096;
+  --green:         #00a67e;
+  --red:           #e53e3e;
+  --yellow:        #d69e2e;
+  --blue:          #2b6cb0;
+  --header-bg:     #1a2235;
+}
+
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
 
   body {
-    background-color: #0a0e1a;
-    color: #e2e8f0;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
     font-family: 'Inter', system-ui, sans-serif;
     direction: rtl;
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    transition: background-color 0.2s, color 0.2s;
   }
 
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #111827;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #2d3748;
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #4a5568;
-  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 }
 
 @layer components {
   .card {
-    @apply bg-[#1a2235] rounded-xl border border-[#2d3748] p-5;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+  }
+  .card-hover:hover {
+    border-color: var(--blue);
   }
 
   .btn-primary {
-    @apply bg-[#00d09c] text-[#0a0e1a] font-semibold px-4 py-2 rounded-lg hover:bg-[#00b589] transition-colors text-sm;
+    background: var(--green);
+    color: #0a0e1a;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    transition: opacity 0.15s;
+    border: none;
+    cursor: pointer;
   }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-secondary {
-    @apply bg-[#1e2d47] text-[#e2e8f0] font-medium px-4 py-2 rounded-lg hover:bg-[#2d3f5e] transition-colors text-sm border border-[#2d3748];
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
   }
+  .btn-secondary:hover { background: var(--border); }
 
   .btn-danger {
-    @apply bg-transparent text-[#ff4757] font-medium px-3 py-1.5 rounded-lg hover:bg-[#ff47571a] transition-colors text-sm border border-[#ff4757];
+    background: transparent;
+    color: var(--red);
+    font-weight: 500;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    border: 1px solid var(--red);
+    cursor: pointer;
   }
+  .btn-danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
 
-  .tag-buy {
-    @apply bg-[#00d09c1a] text-[#00d09c] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#00d09c33];
-  }
+  .tag-buy    { background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--green); font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; border:1px solid color-mix(in srgb, var(--green) 35%, transparent); }
+  .tag-sell   { background: color-mix(in srgb, var(--red)   15%, transparent); color: var(--red);   font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; border:1px solid color-mix(in srgb, var(--red)   35%, transparent); }
+  .tag-watch  { background: color-mix(in srgb, var(--yellow) 15%, transparent); color: var(--yellow); font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; border:1px solid color-mix(in srgb, var(--yellow) 35%, transparent); }
+  .tag-neutral{ background: color-mix(in srgb, var(--text-secondary) 15%, transparent); color: var(--text-secondary); font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:9999px; border:1px solid color-mix(in srgb, var(--text-secondary) 30%, transparent); }
 
-  .tag-sell {
-    @apply bg-[#ff47571a] text-[#ff4757] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#ff475733];
-  }
-
-  .tag-watch {
-    @apply bg-[#ffd32a1a] text-[#ffd32a] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#ffd32a33];
-  }
-
-  .tag-neutral {
-    @apply bg-[#94a3b81a] text-[#94a3b8] text-xs font-semibold px-2 py-0.5 rounded-full border border-[#94a3b833];
-  }
-
-  .positive {
-    @apply text-[#00d09c];
-  }
-
-  .negative {
-    @apply text-[#ff4757];
-  }
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
 }
 
-/* Number font */
-.num {
-  font-family: 'JetBrains Mono', monospace;
-}
+.num { font-family: 'JetBrains Mono', monospace; }
 
-/* Pulse animation for live indicator */
-@keyframes pulse-green {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-.live-dot {
-  animation: pulse-green 2s infinite;
-}
+@keyframes pulse-green { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.live-dot { animation: pulse-green 2s infinite; }

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import create_tables
-from .routes import portfolio, radar, stocks
+from .routes import portfolio, radar, stocks, ziv_index
 
 app = FastAPI(
     title="Stock Tracker API",
@@ -27,6 +27,7 @@ def startup():
 app.include_router(portfolio.router)
 app.include_router(radar.router)
 app.include_router(stocks.router)
+app.include_router(ziv_index.router)
 
 
 @app.get("/")

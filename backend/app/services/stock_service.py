@@ -7,7 +7,6 @@ import datetime
 
 
 def safe_val(v):
-    """Convert numpy/pandas types to Python native, handling NaN."""
     if v is None:
         return None
     if isinstance(v, float) and np.isnan(v):
@@ -18,7 +17,6 @@ def safe_val(v):
 
 
 def get_stock_info(symbol: str) -> Dict[str, Any]:
-    """Fetch company info from yfinance."""
     try:
         ticker = yf.Ticker(symbol)
         info = ticker.info
@@ -30,6 +28,7 @@ def get_stock_info(symbol: str) -> Dict[str, Any]:
             "description": info.get("longBusinessSummary", ""),
             "market_cap": safe_val(info.get("marketCap")),
             "pe_ratio": safe_val(info.get("trailingPE")),
+            "forward_pe": safe_val(info.get("forwardPE")),
             "dividend_yield": safe_val(info.get("dividendYield")),
             "beta": safe_val(info.get("beta")),
             "52w_high": safe_val(info.get("fiftyTwoWeekHigh")),
@@ -38,27 +37,178 @@ def get_stock_info(symbol: str) -> Dict[str, Any]:
             "website": info.get("website", ""),
             "country": info.get("country", ""),
             "currency": info.get("currency", "USD"),
+            "employees": safe_val(info.get("fullTimeEmployees")),
+            "revenue": safe_val(info.get("totalRevenue")),
+            "revenue_growth": safe_val(info.get("revenueGrowth")),
+            "gross_margins": safe_val(info.get("grossMargins")),
+            "operating_margins": safe_val(info.get("operatingMargins")),
+            "profit_margins": safe_val(info.get("profitMargins")),
+            "ebitda": safe_val(info.get("ebitda")),
+            "free_cashflow": safe_val(info.get("freeCashflow")),
+            "earnings_growth": safe_val(info.get("earningsGrowth")),
+            "recommendation": info.get("recommendationKey", ""),
+            "target_price": safe_val(info.get("targetMeanPrice")),
+            "analyst_count": safe_val(info.get("numberOfAnalystOpinions")),
+            "short_ratio": safe_val(info.get("shortRatio")),
+            "held_percent_institutions": safe_val(info.get("heldPercentInstitutions")),
         }
     except Exception as e:
         return {"symbol": symbol.upper(), "name": symbol, "error": str(e)}
 
 
+def get_price_ranges(df: pd.DataFrame) -> Dict[str, Any]:
+    """Calculate High/Low ranges for 52W, 1M, 1W, 1D."""
+    if df.empty:
+        return {}
+
+    now = df.index[-1]
+
+    def hl(days):
+        sub = df[df.index >= now - pd.Timedelta(days=days)]
+        if sub.empty:
+            return None, None
+        return round(float(sub["Low"].min()), 2), round(float(sub["High"].max()), 2)
+
+    # 52 week
+    lo_52w, hi_52w = hl(365)
+    # 1 month
+    lo_1m, hi_1m = hl(30)
+    # 1 week
+    lo_1w, hi_1w = hl(7)
+    # today (last trading day)
+    today_row = df.iloc[-1]
+    lo_1d = round(float(today_row["Low"]), 2)
+    hi_1d = round(float(today_row["High"]), 2)
+
+    current = round(float(df["Close"].iloc[-1]), 2)
+    # position within 52w range (0=low, 100=high)
+    pos_52w = None
+    if hi_52w and lo_52w and hi_52w != lo_52w:
+        pos_52w = round((current - lo_52w) / (hi_52w - lo_52w) * 100, 1)
+
+    return {
+        "52w": {"low": lo_52w, "high": hi_52w},
+        "1m":  {"low": lo_1m,  "high": hi_1m},
+        "1w":  {"low": lo_1w,  "high": hi_1w},
+        "1d":  {"low": lo_1d,  "high": hi_1d},
+        "position_52w": pos_52w,
+    }
+
+
+def get_rule_of_40(info: Dict) -> Optional[Dict]:
+    """Calculate Rule of 40 = Revenue Growth % + Operating Margin %."""
+    rev_growth = info.get("revenue_growth")
+    op_margin = info.get("operating_margins")
+    if rev_growth is None or op_margin is None:
+        return None
+    rg_pct = round(rev_growth * 100, 1)
+    om_pct = round(op_margin * 100, 1)
+    score = round(rg_pct + om_pct, 1)
+    return {
+        "revenue_growth_pct": rg_pct,
+        "operating_margin_pct": om_pct,
+        "score": score,
+        "rating": "מצוין" if score >= 40 else "טוב" if score >= 20 else "חלש",
+        "pass": score >= 40,
+    }
+
+
+def get_company_details(symbol: str, info: Dict) -> Dict[str, Any]:
+    """Build rich company detail block: key events, recent news factors."""
+    try:
+        ticker = yf.Ticker(symbol)
+        news_raw = ticker.news or []
+
+        # Upcoming earnings date
+        cal = None
+        try:
+            cal = ticker.calendar
+        except Exception:
+            pass
+
+        next_earnings = None
+        if cal is not None and not (isinstance(cal, dict) and not cal):
+            try:
+                if hasattr(cal, 'columns') and 'Earnings Date' in cal.columns:
+                    ed = cal['Earnings Date'].iloc[0] if not cal.empty else None
+                    if ed is not None:
+                        next_earnings = str(ed)
+            except Exception:
+                pass
+
+        # Key financial metrics
+        rev = info.get("revenue")
+        rev_str = None
+        if rev:
+            if rev >= 1e9:
+                rev_str = f"${rev/1e9:.1f}B"
+            elif rev >= 1e6:
+                rev_str = f"${rev/1e6:.0f}M"
+            else:
+                rev_str = f"${rev:,.0f}"
+
+        fcf = info.get("free_cashflow")
+        fcf_str = None
+        if fcf:
+            fcf_str = f"${fcf/1e9:.1f}B" if abs(fcf) >= 1e9 else f"${fcf/1e6:.0f}M"
+
+        # Recent news as key factors
+        factors = []
+        for item in news_raw[:6]:
+            title = item.get("title", "")
+            if title:
+                factors.append({
+                    "title": title,
+                    "publisher": item.get("publisher", ""),
+                    "link": item.get("link", ""),
+                    "published": item.get("providerPublishTime", 0),
+                })
+
+        # Analyst consensus
+        rec = info.get("recommendation", "")
+        target = info.get("target_price")
+        analyst_count = info.get("analyst_count")
+
+        rec_map = {
+            "strongBuy": "קנייה חזקה",
+            "buy": "קנייה",
+            "hold": "החזק",
+            "sell": "מכירה",
+            "strongSell": "מכירה חזקה",
+        }
+
+        return {
+            "revenue_str": rev_str,
+            "free_cashflow_str": fcf_str,
+            "next_earnings": next_earnings,
+            "analyst_consensus": rec_map.get(rec, rec),
+            "analyst_target": round(target, 2) if target else None,
+            "analyst_count": analyst_count,
+            "key_factors": factors,
+            "gross_margin_pct": round(info.get("gross_margins", 0) * 100, 1) if info.get("gross_margins") else None,
+            "operating_margin_pct": round(info.get("operating_margins", 0) * 100, 1) if info.get("operating_margins") else None,
+            "profit_margin_pct": round(info.get("profit_margins", 0) * 100, 1) if info.get("profit_margins") else None,
+            "held_institutions_pct": round(info.get("held_percent_institutions", 0) * 100, 1) if info.get("held_percent_institutions") else None,
+            "short_ratio": info.get("short_ratio"),
+            "employees": info.get("employees"),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def get_historical_data(symbol: str, period: str = "1y") -> pd.DataFrame:
-    """Fetch historical OHLCV data."""
     ticker = yf.Ticker(symbol)
     df = ticker.history(period=period)
     if df.empty:
         return df
     df = df[["Open", "High", "Low", "Close", "Volume"]].copy()
     df.index = pd.to_datetime(df.index)
-    # Remove timezone info
     if df.index.tz is not None:
         df.index = df.index.tz_localize(None)
     return df
 
 
 def get_current_price(symbol: str) -> Optional[float]:
-    """Get latest price."""
     try:
         ticker = yf.Ticker(symbol)
         df = ticker.history(period="2d")
@@ -69,24 +219,41 @@ def get_current_price(symbol: str) -> Optional[float]:
         return None
 
 
+def get_premarket_data(symbol: str) -> Optional[Dict]:
+    """Fetch pre-market price and change if available."""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        pre_price = safe_val(info.get("preMarketPrice"))
+        prev_close = safe_val(info.get("regularMarketPreviousClose")) or safe_val(info.get("previousClose"))
+        if pre_price and prev_close:
+            chg = round((pre_price - prev_close) / prev_close * 100, 2)
+            return {"price": pre_price, "change_pct": chg, "prev_close": prev_close}
+        return None
+    except Exception:
+        return None
+
+
 def get_stock_analysis(symbol: str) -> Dict[str, Any]:
-    """Full technical analysis for a stock."""
     try:
         df = get_historical_data(symbol, period="2y")
         if df.empty or len(df) < 50:
             return {"error": "Insufficient data"}
 
-        df = calculate_indicators(df)
-        signal_data = compute_signal(df)
-        sr = get_support_resistance(df)
+        df_ind = calculate_indicators(df)
+        signal_data = compute_signal(df_ind)
+        sr = get_support_resistance(df_ind)
+        price_ranges = get_price_ranges(df)
 
-        latest = df.iloc[-1]
+        latest = df_ind.iloc[-1]
         current_price = float(latest["Close"])
 
-        # Price history for chart (last 1 year)
-        chart_df = df.tail(252).copy()
+        # Chart data (last 1 year)
+        chart_df = df_ind.tail(252).copy()
         price_history = []
         for ts, row in chart_df.iterrows():
+            def r(v):
+                return round(float(v), 2) if not np.isnan(float(v)) else None
             price_history.append({
                 "date": ts.strftime("%Y-%m-%d"),
                 "open": round(float(row["Open"]), 2),
@@ -94,25 +261,27 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
                 "low": round(float(row["Low"]), 2),
                 "close": round(float(row["Close"]), 2),
                 "volume": int(row["Volume"]),
-                "sma20": round(float(row["SMA20"]), 2) if not np.isnan(row["SMA20"]) else None,
-                "sma50": round(float(row["SMA50"]), 2) if not np.isnan(row["SMA50"]) else None,
-                "sma200": round(float(row["SMA200"]), 2) if not np.isnan(row["SMA200"]) else None,
-                "bb_upper": round(float(row["BB_Upper"]), 2) if not np.isnan(row["BB_Upper"]) else None,
-                "bb_lower": round(float(row["BB_Lower"]), 2) if not np.isnan(row["BB_Lower"]) else None,
-                "rsi": round(float(row["RSI"]), 1) if not np.isnan(row.get("RSI", float("nan"))) else None,
-                "macd": round(float(row["MACD"]), 4) if not np.isnan(row.get("MACD", float("nan"))) else None,
-                "macd_signal": round(float(row["MACD_Signal"]), 4) if not np.isnan(row.get("MACD_Signal", float("nan"))) else None,
-                "macd_hist": round(float(row["MACD_Hist"]), 4) if not np.isnan(row.get("MACD_Hist", float("nan"))) else None,
+                "sma20":  r(row.get("SMA20", float("nan"))),
+                "sma50":  r(row.get("SMA50", float("nan"))),
+                "sma200": r(row.get("SMA200", float("nan"))),
+                "bb_upper": r(row.get("BB_Upper", float("nan"))),
+                "bb_lower": r(row.get("BB_Lower", float("nan"))),
+                "rsi":      r(row.get("RSI", float("nan"))),
+                "macd":     round(float(row.get("MACD", 0)), 4) if not np.isnan(float(row.get("MACD", float("nan")))) else None,
+                "macd_signal": round(float(row.get("MACD_Signal", 0)), 4) if not np.isnan(float(row.get("MACD_Signal", float("nan")))) else None,
+                "macd_hist":   round(float(row.get("MACD_Hist", 0)), 4) if not np.isnan(float(row.get("MACD_Hist", float("nan")))) else None,
             })
 
-        # Performance
         def pct_change(days):
             if len(df) < days + 1:
                 return None
-            start_price = float(df["Close"].iloc[-(days + 1)])
-            return round((current_price - start_price) / start_price * 100, 2)
+            start = float(df["Close"].iloc[-(days + 1)])
+            return round((current_price - start) / start * 100, 2)
 
         info = get_stock_info(symbol)
+        rule40 = get_rule_of_40(info)
+        company_details = get_company_details(symbol, info)
+        premarket = get_premarket_data(symbol)
 
         return {
             "symbol": symbol.upper(),
@@ -121,7 +290,11 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
             "info": info,
             "signal": signal_data,
             "support_resistance": sr,
+            "price_ranges": price_ranges,
             "price_history": price_history,
+            "rule_of_40": rule40,
+            "company_details": company_details,
+            "premarket": premarket,
             "performance": {
                 "1d": pct_change(1),
                 "5d": pct_change(5),
@@ -136,18 +309,17 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
 
 
 def get_stock_news(symbol: str) -> List[Dict]:
-    """Fetch latest news from yfinance."""
     try:
         ticker = yf.Ticker(symbol)
         news = ticker.news or []
-        result = []
-        for item in news[:8]:
-            result.append({
+        return [
+            {
                 "title": item.get("title", ""),
                 "publisher": item.get("publisher", ""),
                 "link": item.get("link", ""),
                 "published": item.get("providerPublishTime", 0),
-            })
-        return result
+            }
+            for item in news[:8]
+        ]
     except Exception:
         return []

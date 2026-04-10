@@ -37,6 +37,25 @@ class Notification(Base):
     read = Column(Boolean, default=False)
 
 
+class ZivIndexRecord(Base):
+    """מדד זיו — backtesting record for each recommendation."""
+    __tablename__ = "ziv_index"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, index=True)
+    name = Column(String)
+    signal_type = Column(String)          # "buy" or "sell"
+    rec_price = Column(Float)             # price at recommendation
+    rec_date = Column(DateTime, default=datetime.datetime.utcnow)
+    check_date = Column(DateTime, nullable=True)    # when we evaluated result
+    result_price = Column(Float, nullable=True)     # price at check_date
+    result_pct = Column(Float, nullable=True)       # % change
+    outcome = Column(Integer, nullable=True)        # 1=success, 0=fail, None=pending
+    notes = Column(String, nullable=True)
+    rule40_score = Column(Float, nullable=True)
+    ta_score = Column(Integer, nullable=True)
+
+
 def get_db():
     db = SessionLocal()
     try:

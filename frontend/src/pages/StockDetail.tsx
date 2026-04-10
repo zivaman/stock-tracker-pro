@@ -2,35 +2,194 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, ExternalLink, Globe, TrendingUp, TrendingDown,
-  Building2, DollarSign, BarChart3, AlertCircle, RefreshCw,
-  PlusCircle
+  Building2, BarChart3, AlertCircle, RefreshCw, PlusCircle, Sun
 } from 'lucide-react';
-import { getStockDetail, getStockNews } from '../api/client';
+import { getStockDetail, addZivRecord } from '../api/client';
 import StockChart from '../components/StockChart';
 import TechnicalAnalysis from '../components/TechnicalAnalysis';
 import type { StockDetail as StockDetailType } from '../types';
 
-function formatMarketCap(mc: number | null): string {
-  if (!mc) return 'N/A';
-  if (mc >= 1e12) return `$${(mc / 1e12).toFixed(2)}T`;
-  if (mc >= 1e9) return `$${(mc / 1e9).toFixed(1)}B`;
-  return `$${mc}`;
+function fmt(n: number | null | undefined, prefix = '$', suffix = '') {
+  if (n == null) return 'N/A';
+  if (Math.abs(n) >= 1e12) return `${prefix}${(n / 1e12).toFixed(1)}T${suffix}`;
+  if (Math.abs(n) >= 1e9)  return `${prefix}${(n / 1e9).toFixed(1)}B${suffix}`;
+  if (Math.abs(n) >= 1e6)  return `${prefix}${(n / 1e6).toFixed(0)}M${suffix}`;
+  return `${prefix}${n.toLocaleString()}${suffix}`;
 }
 
 function PerfBadge({ label, value }: { label: string; value: number | null | undefined }) {
   if (value == null) return (
     <div className="text-center">
-      <p className="text-[10px] text-[#64748b]">{label}</p>
-      <p className="text-sm font-bold text-[#475569]">N/A</p>
+      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-sm font-bold" style={{ color: 'var(--text-muted)' }}>N/A</p>
     </div>
   );
   const isPos = value >= 0;
   return (
     <div className="text-center">
-      <p className="text-[10px] text-[#64748b]">{label}</p>
-      <p className={`text-sm font-bold num ${isPos ? 'text-[#00d09c]' : 'text-[#ff4757]'}`}>
+      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <p className="text-sm font-bold num" style={{ color: isPos ? 'var(--green)' : 'var(--red)' }}>
         {isPos ? '+' : ''}{value.toFixed(2)}%
       </p>
+    </div>
+  );
+}
+
+function PriceRangeRow({ label, low, high, current }: { label: string; low: number | null; high: number | null; current: number }) {
+  if (!low || !high) return null;
+  const pos = high !== low ? ((current - low) / (high - low)) * 100 : 50;
+  const clamped = Math.max(0, Math.min(100, pos));
+  return (
+    <div className="py-2 border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex justify-between text-xs mb-1.5">
+        <span className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+        <div className="flex gap-4 num">
+          <span style={{ color: 'var(--red)' }}>נמוך ${low}</span>
+          <span style={{ color: 'var(--green)' }}>גבוה ${high}</span>
+        </div>
+      </div>
+      <div className="relative h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-hover)' }}>
+        <div className="h-full rounded-full" style={{
+          width: `${clamped}%`,
+          background: `linear-gradient(to left, var(--green), var(--yellow), var(--red))`
+        }} />
+        <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 shadow"
+          style={{ left: `calc(${clamped}% - 6px)`, background: 'white', borderColor: 'var(--blue)' }} />
+      </div>
+      <div className="flex justify-between text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+        <span>נמוך</span>
+        <span className="font-semibold num" style={{ color: 'var(--blue)' }}>
+          מיקום נוכחי: {pos.toFixed(0)}%
+        </span>
+        <span>גבוה</span>
+      </div>
+    </div>
+  );
+}
+
+function Rule40Card({ rule40 }: { rule40: any }) {
+  if (!rule40) return null;
+  const color = rule40.pass ? 'var(--green)' : rule40.score >= 20 ? 'var(--yellow)' : 'var(--red)';
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
+          כלל ה-40 (Rule of 40)
+        </h4>
+        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
+          style={{ color, background: `color-mix(in srgb, ${color} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 30%, transparent)` }}>
+          {rule40.rating}
+        </span>
+      </div>
+      <div className="text-center mb-3">
+        <p className="text-4xl font-black num" style={{ color }}>
+          {rule40.score > 0 ? '+' : ''}{rule40.score}
+        </p>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+          {rule40.pass ? '✓ עובר כלל ה-40' : '✗ לא עובר כלל ה-40'}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-center text-xs">
+        <div className="rounded-lg p-2" style={{ background: 'var(--bg-hover)' }}>
+          <p style={{ color: 'var(--text-muted)' }}>צמיחת הכנסות</p>
+          <p className="font-bold num mt-0.5" style={{ color: rule40.revenue_growth_pct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {rule40.revenue_growth_pct > 0 ? '+' : ''}{rule40.revenue_growth_pct}%
+          </p>
+        </div>
+        <div className="rounded-lg p-2" style={{ background: 'var(--bg-hover)' }}>
+          <p style={{ color: 'var(--text-muted)' }}>מרווח תפעולי</p>
+          <p className="font-bold num mt-0.5" style={{ color: rule40.operating_margin_pct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {rule40.operating_margin_pct > 0 ? '+' : ''}{rule40.operating_margin_pct}%
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompanyDetails({ details, info }: { details: any; info: any }) {
+  if (!details) return null;
+  return (
+    <div className="space-y-4">
+      {/* Analyst consensus */}
+      {details.analyst_consensus && (
+        <div className="card">
+          <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-secondary)' }}>
+            קונסנזוס אנליסטים
+          </h4>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>{details.analyst_consensus}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{details.analyst_count} אנליסטים</p>
+            </div>
+            {details.analyst_target && (
+              <div className="text-right">
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>מחיר יעד</p>
+                <p className="font-black text-xl num" style={{ color: 'var(--blue)' }}>${details.analyst_target}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Financial metrics */}
+      <div className="card">
+        <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-secondary)' }}>
+          נתונים פיננסיים
+        </h4>
+        <div className="space-y-2">
+          {[
+            { label: 'הכנסות שנתיות', value: details.revenue_str },
+            { label: 'תזרים מזומנים חופשי', value: details.free_cashflow_str },
+            { label: 'מרווח גולמי', value: details.gross_margin_pct != null ? `${details.gross_margin_pct}%` : null },
+            { label: 'מרווח תפעולי', value: details.operating_margin_pct != null ? `${details.operating_margin_pct}%` : null },
+            { label: 'מרווח רווח נקי', value: details.profit_margin_pct != null ? `${details.profit_margin_pct}%` : null },
+            { label: 'אחזקות מוסדיות', value: details.held_institutions_pct != null ? `${details.held_institutions_pct}%` : null },
+            { label: 'Short Ratio', value: details.short_ratio != null ? `${details.short_ratio}` : null },
+            { label: 'עובדים', value: details.employees?.toLocaleString() },
+          ].filter(i => i.value).map(({ label, value }) => (
+            <div key={label} className="flex justify-between items-center py-1.5 border-b last:border-0"
+              style={{ borderColor: 'var(--border)' }}>
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+              <span className="text-sm font-bold num" style={{ color: 'var(--text-primary)' }}>{value}</span>
+            </div>
+          ))}
+          {details.next_earnings && (
+            <div className="flex justify-between items-center py-1.5">
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>דוח רווחים הבא</span>
+              <span className="text-sm font-bold" style={{ color: 'var(--yellow)' }}>{details.next_earnings}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Key factors / news */}
+      {details.key_factors?.length > 0 && (
+        <div className="card">
+          <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-secondary)' }}>
+            גורמי מפתח ואירועים
+          </h4>
+          <div className="space-y-2">
+            {details.key_factors.map((f: any, i: number) => (
+              <a key={i} href={f.link} target="_blank" rel="noopener noreferrer"
+                className="block rounded-lg p-2.5 -mx-1 transition-opacity hover:opacity-75"
+                style={{ background: 'var(--bg-hover)' }}>
+                <p className="text-sm leading-snug line-clamp-2" style={{ color: 'var(--text-primary)' }}>
+                  {f.title}
+                </p>
+                <div className="flex justify-between mt-1">
+                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{f.publisher}</span>
+                  {f.published > 0 && (
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      {new Date(f.published * 1000).toLocaleDateString('he-IL')}
+                    </span>
+                  )}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -39,126 +198,136 @@ export default function StockDetailPage() {
   const { symbol } = useParams<{ symbol: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<StockDetailType | null>(null);
-  const [news, setNews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'chart' | 'analysis' | 'info'>('chart');
+  const [addingZiv, setAddingZiv] = useState(false);
+  const [zivAdded, setZivAdded] = useState(false);
 
   const fetchData = async () => {
     if (!symbol) return;
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
-      const [detail, newsData] = await Promise.all([
-        getStockDetail(symbol),
-        getStockNews(symbol),
-      ]);
-      if (detail.error) {
-        setError(detail.error);
-      } else {
-        setData(detail);
-        setNews(newsData.news || []);
-      }
+      const detail = await getStockDetail(symbol);
+      if (detail.error) setError(detail.error);
+      else setData(detail);
     } catch (err: any) {
       setError(err.message || 'שגיאה בטעינת נתוני המניה');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [symbol]);
+  useEffect(() => { fetchData(); }, [symbol]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="w-12 h-12 border-2 border-[#00d09c] border-t-transparent rounded-full animate-spin" />
-        <div className="text-center">
-          <p className="text-white font-medium">טוען נתוני {symbol}...</p>
-          <p className="text-[#94a3b8] text-sm mt-1">מחשב ניתוח טכני</p>
-        </div>
-      </div>
-    );
-  }
+  const handleAddZiv = async () => {
+    if (!data) return;
+    setAddingZiv(true);
+    try {
+      await addZivRecord({
+        symbol: data.symbol,
+        name: data.name,
+        signal_type: data.signal.signal.includes('buy') ? 'buy' : 'sell',
+        rec_price: data.current_price,
+        ta_score: data.signal.score,
+        rule40_score: data.rule_of_40?.score ?? undefined,
+      });
+      setZivAdded(true);
+      setTimeout(() => setZivAdded(false), 3000);
+    } finally { setAddingZiv(false); }
+  };
 
-  if (error || !data) {
-    return (
-      <div className="card text-center py-12">
-        <AlertCircle size={40} className="mx-auto text-[#ff4757] mb-3" />
-        <p className="text-white font-semibold">לא ניתן לטעון את {symbol}</p>
-        <p className="text-[#94a3b8] text-sm mt-1">{error}</p>
-        <div className="flex gap-3 justify-center mt-5">
-          <button onClick={() => navigate(-1)} className="btn-secondary flex items-center gap-2">
-            <ArrowRight size={15} />
-            חזור
-          </button>
-          <button onClick={fetchData} className="btn-primary flex items-center gap-2">
-            <RefreshCw size={15} />
-            נסה שוב
-          </button>
-        </div>
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <div className="w-12 h-12 border-2 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: 'var(--green)', borderTopColor: 'transparent' }} />
+      <div className="text-center">
+        <p className="font-medium" style={{ color: 'var(--text-primary)' }}>טוען נתוני {symbol}...</p>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>מחשב ניתוח טכני מלא</p>
       </div>
-    );
-  }
+    </div>
+  );
+
+  if (error || !data) return (
+    <div className="card text-center py-12">
+      <AlertCircle size={40} className="mx-auto mb-3" style={{ color: 'var(--red)' }} />
+      <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>לא ניתן לטעון את {symbol}</p>
+      <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>{error}</p>
+      <div className="flex gap-3 justify-center mt-5">
+        <button onClick={() => navigate(-1)} className="btn-secondary flex items-center gap-2"><ArrowRight size={15} />חזור</button>
+        <button onClick={fetchData} className="btn-primary flex items-center gap-2"><RefreshCw size={15} />נסה שוב</button>
+      </div>
+    </div>
+  );
 
   const signalConfig: Record<string, { label: string; color: string }> = {
-    strong_buy: { label: 'קנייה חזקה', color: '#00d09c' },
-    buy: { label: 'קנייה', color: '#00d09c' },
-    watch: { label: 'מעקב', color: '#ffd32a' },
-    neutral: { label: 'ניטראלי', color: '#94a3b8' },
-    sell: { label: 'מכירה / מכור', color: '#ff4757' },
+    strong_buy: { label: 'קנייה חזקה', color: 'var(--green)' },
+    buy:        { label: 'קנייה',       color: 'var(--green)' },
+    watch:      { label: 'מעקב',        color: 'var(--yellow)' },
+    neutral:    { label: 'ניטראלי',     color: 'var(--text-secondary)' },
+    sell:       { label: 'מכירה',       color: 'var(--red)' },
   };
   const sig = signalConfig[data.signal.signal] || signalConfig.neutral;
   const isPriceUp = (data.performance['1d'] ?? 0) >= 0;
+  const pr = (data as any).price_ranges;
+  const details = (data as any).company_details;
+  const rule40 = (data as any).rule_of_40;
+  const premarket = (data as any).premarket;
 
   return (
     <div className="space-y-5">
-      {/* Back */}
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-sm text-[#94a3b8] hover:text-white transition-colors"
-      >
-        <ArrowRight size={16} />
-        חזור
+      <button onClick={() => navigate(-1)}
+        className="flex items-center gap-2 text-sm transition-colors hover:opacity-70"
+        style={{ color: 'var(--text-secondary)' }}>
+        <ArrowRight size={16} /> חזור
       </button>
 
-      {/* Stock Header */}
+      {/* Header card */}
       <div className="card">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-4xl font-black text-white num">{data.symbol}</h1>
-              <span
-                className="px-3 py-1 rounded-full text-sm font-bold border"
-                style={{ color: sig.color, borderColor: `${sig.color}40`, background: `${sig.color}15` }}
-              >
+            <div className="flex items-center gap-3 mb-1 flex-wrap">
+              <h1 className="text-4xl font-black num" style={{ color: 'var(--text-primary)' }}>{data.symbol}</h1>
+              <span className="px-3 py-1 rounded-full text-sm font-bold border"
+                style={{ color: sig.color, borderColor: `color-mix(in srgb, ${sig.color} 40%, transparent)`, background: `color-mix(in srgb, ${sig.color} 15%, transparent)` }}>
                 {sig.label}
               </span>
+              {/* Pre-market */}
+              {premarket && (
+                <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full border"
+                  style={{ color: 'var(--yellow)', borderColor: 'color-mix(in srgb, var(--yellow) 40%, transparent)', background: 'color-mix(in srgb, var(--yellow) 10%, transparent)' }}>
+                  <Sun size={11} /> טרום מסחר: ${premarket.price}
+                  <span style={{ color: premarket.change_pct >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                    {premarket.change_pct >= 0 ? '+' : ''}{premarket.change_pct}%
+                  </span>
+                </span>
+              )}
             </div>
-            <p className="text-[#94a3b8]">{data.name}</p>
+            <p style={{ color: 'var(--text-secondary)' }}>{data.name}</p>
             {data.info.sector && data.info.sector !== 'N/A' && (
-              <p className="text-xs text-[#64748b] mt-1">{data.info.sector} · {data.info.industry}</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{data.info.sector} · {data.info.industry}</p>
             )}
           </div>
 
           <div className="text-right">
-            <p className="text-4xl font-black num text-white">${data.current_price}</p>
+            <p className="text-4xl font-black num" style={{ color: 'var(--text-primary)' }}>${data.current_price}</p>
             <div className="flex items-center justify-end gap-2 mt-1">
-              {isPriceUp
-                ? <TrendingUp size={16} className="text-[#00d09c]" />
-                : <TrendingDown size={16} className="text-[#ff4757]" />
-              }
-              <span className={`text-lg font-bold num ${isPriceUp ? 'text-[#00d09c]' : 'text-[#ff4757]'}`}>
+              {isPriceUp ? <TrendingUp size={16} style={{ color: 'var(--green)' }} /> : <TrendingDown size={16} style={{ color: 'var(--red)' }} />}
+              <span className="text-lg font-bold num" style={{ color: isPriceUp ? 'var(--green)' : 'var(--red)' }}>
                 {isPriceUp ? '+' : ''}{data.performance['1d']?.toFixed(2) ?? '0'}%
               </span>
-              <span className="text-[#64748b] text-sm">היום</span>
             </div>
+            {/* Add to מדד זיו */}
+            <button onClick={handleAddZiv} disabled={addingZiv}
+              className="mt-2 btn-secondary flex items-center gap-1 text-xs mr-auto"
+              style={{ color: zivAdded ? 'var(--green)' : undefined }}>
+              <PlusCircle size={13} />
+              {zivAdded ? '✓ נוסף למדד זיו' : addingZiv ? 'מוסיף...' : 'הוסף למדד זיו'}
+            </button>
           </div>
         </div>
 
-        {/* Performance Row */}
-        <div className="mt-4 pt-4 border-t border-[#2d3748] grid grid-cols-3 sm:grid-cols-6 gap-3">
+        {/* Performance row */}
+        <div className="mt-4 pt-4 border-t grid grid-cols-3 sm:grid-cols-6 gap-3"
+          style={{ borderColor: 'var(--border)' }}>
           <PerfBadge label="יום" value={data.performance['1d']} />
           <PerfBadge label="שבוע" value={data.performance['5d']} />
           <PerfBadge label="חודש" value={data.performance['1m']} />
@@ -168,88 +337,80 @@ export default function StockDetailPage() {
         </div>
       </div>
 
+      {/* Price Ranges */}
+      {pr && (
+        <div className="card">
+          <h3 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-secondary)' }}>
+            טווחי מחיר — גבוה/נמוך
+          </h3>
+          <PriceRangeRow label="שנה (52 שבועות)" low={pr['52w']?.low} high={pr['52w']?.high} current={data.current_price} />
+          <PriceRangeRow label="חודש" low={pr['1m']?.low} high={pr['1m']?.high} current={data.current_price} />
+          <PriceRangeRow label="שבוע" low={pr['1w']?.low} high={pr['1w']?.high} current={data.current_price} />
+          <PriceRangeRow label="יום" low={pr['1d']?.low} high={pr['1d']?.high} current={data.current_price} />
+        </div>
+      )}
+
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {[
           { key: 'chart', label: 'גרף מחיר', icon: BarChart3 },
           { key: 'analysis', label: 'ניתוח טכני', icon: TrendingUp },
           { key: 'info', label: 'מידע חברה', icon: Building2 },
         ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key as any)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === key
-                ? 'bg-[#00d09c] text-[#0a0e1a]'
-                : 'bg-[#1a2235] text-[#94a3b8] hover:text-white border border-[#2d3748]'
-            }`}
-          >
-            <Icon size={15} />
-            {label}
+          <button key={key} onClick={() => setActiveTab(key as any)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border"
+            style={activeTab === key
+              ? { background: 'var(--green)', color: '#0a0e1a', borderColor: 'var(--green)' }
+              : { background: 'var(--bg-card)', color: 'var(--text-secondary)', borderColor: 'var(--border)' }}>
+            <Icon size={15} />{label}
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Main content */}
+        {/* Main */}
         <div className="lg:col-span-2 space-y-5">
           {activeTab === 'chart' && (
             <div className="card">
-              <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--text-secondary)' }}>
                 גרף מחיר עם אינדיקטורים
               </h3>
-              <StockChart
-                data={data.price_history}
-                currentPrice={data.current_price}
-                supportResistance={data.support_resistance}
-              />
+              <StockChart data={data.price_history} currentPrice={data.current_price} supportResistance={data.support_resistance} />
             </div>
           )}
-
           {activeTab === 'analysis' && (
             <TechnicalAnalysis signal={data.signal} history={data.price_history} />
           )}
-
           {activeTab === 'info' && (
             <div className="card space-y-4">
-              <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider">על החברה</h3>
-
-              {data.info.description ? (
-                <p className="text-sm text-[#94a3b8] leading-relaxed">
-                  {data.info.description.slice(0, 800)}{data.info.description.length > 800 ? '...' : ''}
-                </p>
-              ) : (
-                <p className="text-[#475569] text-sm">אין תיאור זמין</p>
-              )}
-
+              <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>על החברה</h3>
+              {data.info.description
+                ? <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    {data.info.description.slice(0, 900)}{data.info.description.length > 900 ? '...' : ''}
+                  </p>
+                : <p className="text-sm" style={{ color: 'var(--text-muted)' }}>אין תיאור זמין</p>
+              }
               <div className="grid grid-cols-2 gap-3 pt-2">
                 {[
-                  { label: 'שווי שוק', value: formatMarketCap(data.info.market_cap) },
-                  { label: 'P/E Ratio', value: data.info.pe_ratio?.toFixed(2) ?? 'N/A' },
-                  { label: 'תשואת דיבידנד', value: data.info.dividend_yield ? `${(data.info.dividend_yield * 100).toFixed(2)}%` : 'אין' },
+                  { label: 'שווי שוק', value: fmt(data.info.market_cap) },
+                  { label: 'P/E', value: data.info.pe_ratio?.toFixed(1) ?? 'N/A' },
+                  { label: 'Forward P/E', value: (data.info as any).forward_pe?.toFixed(1) ?? 'N/A' },
                   { label: 'Beta', value: data.info.beta?.toFixed(2) ?? 'N/A' },
-                  { label: '52W שיא', value: data.info['52w_high'] ? `$${data.info['52w_high']}` : 'N/A' },
-                  { label: '52W שפל', value: data.info['52w_low'] ? `$${data.info['52w_low']}` : 'N/A' },
-                  { label: 'ממוצע נפח', value: data.info.avg_volume ? `${(data.info.avg_volume / 1e6).toFixed(1)}M` : 'N/A' },
+                  { label: '52W גבוה', value: data.info['52w_high'] ? `$${data.info['52w_high']}` : 'N/A' },
+                  { label: '52W נמוך', value: data.info['52w_low'] ? `$${data.info['52w_low']}` : 'N/A' },
+                  { label: 'דיבידנד', value: data.info.dividend_yield ? `${(data.info.dividend_yield * 100).toFixed(2)}%` : 'אין' },
                   { label: 'מדינה', value: data.info.country || 'N/A' },
                 ].map(({ label, value }) => (
-                  <div key={label} className="bg-[#111827] rounded-lg p-3">
-                    <p className="text-[10px] text-[#64748b] mb-0.5">{label}</p>
-                    <p className="text-sm font-bold num text-white">{value}</p>
+                  <div key={label} className="rounded-lg p-3" style={{ background: 'var(--bg-hover)' }}>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                    <p className="text-sm font-bold num mt-0.5" style={{ color: 'var(--text-primary)' }}>{value}</p>
                   </div>
                 ))}
               </div>
-
               {data.info.website && (
-                <a
-                  href={data.info.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-[#3498db] hover:underline"
-                >
-                  <Globe size={14} />
-                  {data.info.website}
-                  <ExternalLink size={12} />
+                <a href={data.info.website} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm hover:underline" style={{ color: 'var(--blue)' }}>
+                  <Globe size={14} />{data.info.website}<ExternalLink size={12} />
                 </a>
               )}
             </div>
@@ -258,77 +419,56 @@ export default function StockDetailPage() {
 
         {/* Sidebar */}
         <div className="space-y-4">
-          {/* Quick Signal */}
+          {/* Signal */}
           <div className="card text-center">
-            <p className="text-xs text-[#94a3b8] uppercase tracking-wider mb-2">המלצה</p>
-            <div
-              className="text-2xl font-black py-3 rounded-xl mb-2"
-              style={{ color: sig.color, background: `${sig.color}15` }}
-            >
+            <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'var(--text-secondary)' }}>המלצה</p>
+            <div className="text-2xl font-black py-3 rounded-xl mb-2"
+              style={{ color: sig.color, background: `color-mix(in srgb, ${sig.color} 15%, transparent)` }}>
               {sig.label}
             </div>
-            <p className="text-xs text-[#64748b]">ציון: {data.signal.score}/100</p>
-            <div className="mt-3 w-full bg-[#1e2d47] rounded-full h-2">
-              <div
-                className="h-2 rounded-full transition-all"
-                style={{ width: `${data.signal.score}%`, background: sig.color }}
-              />
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ציון: {data.signal.score}/100</p>
+            <div className="mt-3 rounded-full h-2" style={{ background: 'var(--bg-hover)' }}>
+              <div className="h-2 rounded-full" style={{ width: `${data.signal.score}%`, background: sig.color }} />
             </div>
           </div>
 
-          {/* Key levels */}
+          {/* Rule of 40 */}
+          <Rule40Card rule40={rule40} />
+
+          {/* Support/Resistance */}
           {(data.support_resistance.support || data.support_resistance.resistance) && (
             <div className="card">
-              <h4 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-3">רמות מפתח</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-secondary)' }}>
+                תמיכה והתנגדות
+              </h4>
               {data.support_resistance.resistance && (
-                <div className="flex justify-between items-center py-2 border-b border-[#2d3748]">
-                  <span className="text-sm text-[#ff4757]">התנגדות</span>
-                  <span className="num font-bold text-white">${data.support_resistance.resistance}</span>
+                <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+                  <span className="text-sm" style={{ color: 'var(--red)' }}>התנגדות</span>
+                  <span className="num font-bold" style={{ color: 'var(--text-primary)' }}>${data.support_resistance.resistance}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center py-2 border-b border-[#2d3748]">
-                <span className="text-sm text-white">מחיר נוכחי</span>
-                <span className="num font-bold text-white">${data.current_price}</span>
+              <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+                <span className="text-sm" style={{ color: 'var(--text-primary)' }}>מחיר נוכחי</span>
+                <span className="num font-bold" style={{ color: 'var(--text-primary)' }}>${data.current_price}</span>
               </div>
               {data.support_resistance.support && (
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-[#00d09c]">תמיכה</span>
-                  <span className="num font-bold text-white">${data.support_resistance.support}</span>
+                  <span className="text-sm" style={{ color: 'var(--green)' }}>תמיכה</span>
+                  <span className="num font-bold" style={{ color: 'var(--text-primary)' }}>${data.support_resistance.support}</span>
                 </div>
               )}
             </div>
           )}
 
-          {/* News */}
-          {news.length > 0 && (
-            <div className="card">
-              <h4 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-3">חדשות אחרונות</h4>
-              <div className="space-y-3">
-                {news.slice(0, 5).map((item, i) => (
-                  <a
-                    key={i}
-                    href={item.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block hover:bg-[#1e2d47] rounded-lg p-2 -mx-2 transition-colors"
-                  >
-                    <p className="text-sm text-white leading-snug line-clamp-2">{item.title}</p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] text-[#64748b]">{item.publisher}</span>
-                      <ExternalLink size={10} className="text-[#475569]" />
-                    </div>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Company details */}
+          <CompanyDetails details={details} info={data.info} />
 
-          {/* Risk Disclaimer */}
-          <div className="card border-[#ffd32a33] bg-[#ffd32a05]">
+          {/* Disclaimer */}
+          <div className="card border" style={{ borderColor: 'color-mix(in srgb, var(--yellow) 30%, transparent)', background: 'color-mix(in srgb, var(--yellow) 5%, transparent)' }}>
             <div className="flex items-start gap-2">
-              <AlertCircle size={14} className="text-[#ffd32a] mt-0.5 flex-shrink-0" />
-              <p className="text-[10px] text-[#94a3b8] leading-relaxed">
-                הניתוח הטכני מבוסס על נתוני עבר ואינו מבטיח תשואה עתידית. ייעוץ השקעות מקצועי מומלץ לפני כל החלטה.
+              <AlertCircle size={14} style={{ color: 'var(--yellow)' }} className="mt-0.5 flex-shrink-0" />
+              <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                הניתוח מבוסס על נתוני עבר ואינו ערובה לתשואה עתידית. ייעוץ השקעות מקצועי מומלץ לפני כל החלטה.
               </p>
             </div>
           </div>
