@@ -75,6 +75,8 @@ def get_portfolio(db: Session = Depends(get_db)):
                 ta = {
                     "score": sig_data.get("score"),
                     "signal": sig_data.get("signal"),
+                    "buy_signal": sig_data.get("buy_signal", False),
+                    "sell_signal": sig_data.get("sell_signal", False),
                     "rsi": sig_data.get("rsi"),
                     "macd": sig_data.get("macd"),
                     "macd_signal": sig_data.get("macd_signal"),
@@ -82,6 +84,7 @@ def get_portfolio(db: Session = Depends(get_db)):
                     "sma200": sig_data.get("sma200"),
                     "bb_upper": sig_data.get("bb_upper"),
                     "bb_lower": sig_data.get("bb_lower"),
+                    "stoch_k": sig_data.get("stoch_k"),
                     "reasons": sig_data.get("reasons", []),
                     "warnings": sig_data.get("warnings", []),
                 }

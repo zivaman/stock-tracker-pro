@@ -70,6 +70,25 @@ export default function PortfolioCard({ position, onRemove }: Props) {
               {isPnlPos
                 ? <TrendingUp  size={15} style={{ color: 'var(--green)' }} />
                 : <TrendingDown size={15} style={{ color: 'var(--red)' }} />}
+              {/* TA signal badge */}
+              {position.ta && (() => {
+                const sig = position.ta.signal;
+                const cfg: Record<string, {label: string; color: string; icon: string}> = {
+                  strong_buy: { label: 'קנייה חזקה', color: '#00c896', icon: '▲▲' },
+                  buy:        { label: 'קנייה',      color: '#3b82f6', icon: '▲' },
+                  watch:      { label: 'מעקב',       color: '#f5c518', icon: '◆' },
+                  neutral:    { label: 'ניטראלי',    color: '#8fa3bf', icon: '●' },
+                  sell:       { label: 'מכירה',      color: '#f04060', icon: '▼' },
+                };
+                const c = cfg[sig] ?? cfg.neutral;
+                return (
+                  <span style={{
+                    fontSize: '.65rem', fontWeight: 700, color: c.color,
+                    background: `${c.color}18`, border: `1px solid ${c.color}44`,
+                    borderRadius: 5, padding: '2px 7px',
+                  }}>{c.icon} {c.label}</span>
+                );
+              })()}
             </div>
             <div style={{ fontSize: '.73rem', color: 'var(--text2)', marginTop: 3, maxWidth: 190, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {position.name}

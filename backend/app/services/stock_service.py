@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from typing import Optional, Dict, Any, List
-from .technical_analysis import calculate_indicators, compute_signal, get_support_resistance
+from .technical_analysis import calculate_indicators, compute_signal, get_support_resistance, compute_fibonacci
 import datetime
 
 
@@ -241,7 +241,11 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
             return {"error": "Insufficient data"}
 
         df_ind = calculate_indicators(df)
-        signal_data = compute_signal(df_ind)
+        # Pass P/E for fundamental scoring
+        raw_info = yf.Ticker(symbol).info
+        pe_ratio = safe_val(raw_info.get("trailingPE"))
+        signal_data = compute_signal(df_ind, pe_ratio=pe_ratio)
+        fibonacci = compute_fibonacci(df_ind)
         sr = get_support_resistance(df_ind)
         price_ranges = get_price_ranges(df)
 
@@ -289,6 +293,7 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
             "current_price": round(current_price, 2),
             "info": info,
             "signal": signal_data,
+            "fibonacci": fibonacci,
             "support_resistance": sr,
             "price_ranges": price_ranges,
             "price_history": price_history,

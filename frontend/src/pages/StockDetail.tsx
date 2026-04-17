@@ -6,7 +6,7 @@ import {
   AlertCircle, Target, Users, Shield, Newspaper, Sun
 } from 'lucide-react';
 import { getStockDetail, addZivRecord, addPosition } from '../api/client';
-import StockChart from '../components/StockChart';
+import CandlestickChart from '../components/CandlestickChart';
 import TechnicalAnalysis from '../components/TechnicalAnalysis';
 import type { StockDetail as StockDetailType } from '../types';
 
@@ -373,7 +373,7 @@ export default function StockDetailPage() {
 
         {/* Chart */}
         <Panel title="גרף מחיר" icon={BarChart2} color="var(--blue)">
-          <StockChart data={data.price_history} currentPrice={data.current_price} supportResistance={data.support_resistance} />
+          <CandlestickChart data={data.price_history} fibonacci={data.fibonacci} showFib={true} />
         </Panel>
 
         {/* Signal + Score */}
@@ -491,7 +491,7 @@ export default function StockDetailPage() {
         </div>
         {/* Full TA component */}
         <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-          <TechnicalAnalysis signal={data.signal} history={data.price_history} />
+          <TechnicalAnalysis signal={data.signal} history={data.price_history} peRatio={data.info?.pe_ratio} />
         </div>
       </Panel>
 

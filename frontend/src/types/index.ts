@@ -22,6 +22,8 @@ export interface PortfolioPosition {
   ta?: {
     score: number;
     signal: string;
+    buy_signal?: boolean;
+    sell_signal?: boolean;
     rsi: number | null;
     macd: number | null;
     macd_signal: number | null;
@@ -29,6 +31,7 @@ export interface PortfolioPosition {
     sma200: number | null;
     bb_upper: number | null;
     bb_lower: number | null;
+    stoch_k?: number | null;
     reasons: string[];
     warnings: string[];
   };
@@ -98,6 +101,8 @@ export interface PricePoint {
 export interface SignalData {
   score: number;
   signal: string;
+  buy_signal?: boolean;
+  sell_signal?: boolean;
   rsi: number | null;
   macd: number | null;
   macd_signal: number | null;
@@ -107,8 +112,17 @@ export interface SignalData {
   bb_upper: number | null;
   bb_lower: number | null;
   bb_middle: number | null;
+  stoch_k?: number | null;
+  stoch_d?: number | null;
+  pe_ratio?: number | null;
   reasons: string[];
   warnings: string[];
+}
+
+export interface FibonacciData {
+  swing_high: number;
+  swing_low: number;
+  levels: Record<string, number>;
 }
 
 export interface StockInfo {
@@ -135,6 +149,7 @@ export interface StockDetail {
   current_price: number;
   info: StockInfo;
   signal: SignalData;
+  fibonacci?: FibonacciData;
   support_resistance: { resistance: number | null; support: number | null };
   price_history: PricePoint[];
   performance: {

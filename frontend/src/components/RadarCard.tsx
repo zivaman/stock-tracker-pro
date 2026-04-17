@@ -4,12 +4,12 @@ import type { RadarStock } from '../types';
 
 interface Props { stock: RadarStock; rank: number; }
 
-const SIGNAL_CFG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  strong_buy: { label: 'קנייה חזקה', color: '#00c896', bg: 'rgba(0,200,150,.15)', border: 'rgba(0,200,150,.4)' },
-  buy:        { label: 'קנייה',      color: '#3b82f6', bg: 'rgba(59,130,246,.12)', border: 'rgba(59,130,246,.35)' },
-  watch:      { label: 'מעקב',       color: '#f5c518', bg: 'rgba(245,197,24,.1)',  border: 'rgba(245,197,24,.35)' },
-  neutral:    { label: 'ניטראלי',    color: '#8fa3bf', bg: 'rgba(143,163,191,.1)', border: 'rgba(143,163,191,.3)' },
-  sell:       { label: 'מכירה',      color: '#f04060', bg: 'rgba(240,64,96,.1)',   border: 'rgba(240,64,96,.35)' },
+const SIGNAL_CFG: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
+  strong_buy: { label: 'קנייה חזקה', icon: '▲▲', color: '#00c896', bg: 'rgba(0,200,150,.15)', border: 'rgba(0,200,150,.4)' },
+  buy:        { label: 'קנייה',      icon: '▲',  color: '#3b82f6', bg: 'rgba(59,130,246,.12)', border: 'rgba(59,130,246,.35)' },
+  watch:      { label: 'מעקב',       icon: '◆',  color: '#f5c518', bg: 'rgba(245,197,24,.1)',  border: 'rgba(245,197,24,.35)' },
+  neutral:    { label: 'ניטראלי',    icon: '●',  color: '#8fa3bf', bg: 'rgba(143,163,191,.1)', border: 'rgba(143,163,191,.3)' },
+  sell:       { label: 'מכירה',      icon: '▼',  color: '#f04060', bg: 'rgba(240,64,96,.1)',   border: 'rgba(240,64,96,.35)' },
 };
 
 function fmt(mc: number | null): string {
@@ -138,12 +138,18 @@ export default function RadarCard({ stock, rank }: Props) {
               </div>
             </div>
           </div>
-          {/* Signal badge */}
-          <div style={{
-            padding: '3px 10px', borderRadius: 6, fontSize: '.7rem', fontWeight: 700,
-            color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`,
-            flexShrink: 0, whiteSpace: 'nowrap'
-          }}>{cfg.label}</div>
+          {/* Signal badge — enlarged with icon */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+            <div style={{
+              padding: '5px 12px', borderRadius: 8, fontWeight: 800,
+              color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`,
+              whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5,
+            }}>
+              <span style={{ fontSize: '.85rem' }}>{cfg.icon}</span>
+              <span style={{ fontSize: '.8rem' }}>{cfg.label}</span>
+            </div>
+            <div className="num" style={{ fontSize: '.72rem', color: cfg.color, fontWeight: 700 }}>ציון: {stock.score}/100</div>
+          </div>
         </div>
 
         {/* Description */}
