@@ -8,6 +8,7 @@ import {
 import { getStockDetail, addZivRecord, addPosition } from '../api/client';
 import CandlestickChart from '../components/CandlestickChart';
 import TechnicalAnalysis from '../components/TechnicalAnalysis';
+import StockChat from '../components/StockChat';
 import type { StockDetail as StockDetailType } from '../types';
 
 /* ─── Helpers ─── */
@@ -373,7 +374,7 @@ export default function StockDetailPage() {
 
         {/* Chart */}
         <Panel title="גרף מחיר" icon={BarChart2} color="var(--blue)">
-          <CandlestickChart data={data.price_history} fibonacci={data.fibonacci} showFib={true} />
+          <CandlestickChart symbol={data.symbol} data={data.price_history} fibonacci={data.fibonacci} showFib={true} />
         </Panel>
 
         {/* Signal + Score */}
@@ -650,6 +651,15 @@ export default function StockDetailPage() {
           onDone={() => { setShowAddPortfolio(false); setPortfolioMsg('✓ נוסף לתיק!'); setTimeout(() => setPortfolioMsg(''), 3000); }}
         />
       )}
+
+      {/* LLM Chat — floating */}
+      <StockChat
+        symbol={data.symbol}
+        currentPrice={data.current_price}
+        signal={data.signal}
+        sector={data.info?.sector}
+        name={data.name}
+      />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell,
@@ -50,15 +51,23 @@ interface IndicatorCardProps {
   extraInfo?: string;
 }
 function IndicatorCard({ title, subtitle, currentValue, currentStatus, buyZone, sellZone, explanation, extraInfo }: IndicatorCardProps) {
+  const [open, setOpen] = useState(false);
   const statusColor = currentStatus === 'buy' ? 'var(--green)' : currentStatus === 'sell' ? 'var(--red)' : currentStatus === 'watch' ? 'var(--yellow)' : 'var(--text2)';
   const statusLabel = currentStatus === 'buy' ? '▲ קנייה' : currentStatus === 'sell' ? '▼ מכירה' : currentStatus === 'watch' ? '◆ מעקב' : '● ניטראלי';
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 8 }}>
-      {/* Header */}
-      <div style={{ background: 'var(--card2)', padding: '0.7rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text)' }}>{title}</div>
-          <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: 1 }}>{subtitle}</div>
+      {/* Header — clickable to expand */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ background: 'var(--card2)', padding: '0.7rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Tooltip ? icon */}
+          <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--border2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.6rem', fontWeight: 900, color: 'var(--muted)', flexShrink: 0 }}>?</div>
+          <div>
+            <div style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text)' }}>{title}</div>
+            <div style={{ fontSize: '.7rem', color: 'var(--muted)', marginTop: 1 }}>{subtitle}</div>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {currentValue && (
@@ -67,27 +76,30 @@ function IndicatorCard({ title, subtitle, currentValue, currentStatus, buyZone, 
           <span style={{ fontSize: '.72rem', fontWeight: 700, color: statusColor,
             background: `${statusColor}18`, border: `1px solid ${statusColor}44`,
             borderRadius: 6, padding: '2px 8px' }}>{statusLabel}</span>
+          <span style={{ fontSize: '.75rem', color: 'var(--muted)', marginRight: 2 }}>{open ? '▲' : '▼'}</span>
         </div>
       </div>
-      {/* Body */}
-      <div style={{ padding: '0.75rem 1rem', background: 'var(--card)' }}>
-        <p style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.55, marginBottom: 8 }}>{explanation}</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <div style={{ background: 'rgba(0,200,150,.07)', border: '1px solid rgba(0,200,150,.2)', borderRadius: 7, padding: '5px 8px' }}>
-            <div style={{ fontSize: '.62rem', color: 'var(--green)', fontWeight: 700, marginBottom: 2 }}>▲ אזור קנייה</div>
-            <div style={{ fontSize: '.75rem', color: 'var(--text)', fontWeight: 600 }}>{buyZone}</div>
+      {/* Body — shown on expand */}
+      {open && (
+        <div style={{ padding: '0.75rem 1rem', background: 'var(--card)', borderTop: '1px solid var(--border)' }}>
+          <p style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.55, marginBottom: 8 }}>{explanation}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <div style={{ background: 'rgba(0,200,150,.07)', border: '1px solid rgba(0,200,150,.2)', borderRadius: 7, padding: '5px 8px' }}>
+              <div style={{ fontSize: '.62rem', color: 'var(--green)', fontWeight: 700, marginBottom: 2 }}>▲ אזור קנייה</div>
+              <div style={{ fontSize: '.75rem', color: 'var(--text)', fontWeight: 600 }}>{buyZone}</div>
+            </div>
+            <div style={{ background: 'rgba(240,64,96,.07)', border: '1px solid rgba(240,64,96,.2)', borderRadius: 7, padding: '5px 8px' }}>
+              <div style={{ fontSize: '.62rem', color: 'var(--red)', fontWeight: 700, marginBottom: 2 }}>▼ אזור מכירה</div>
+              <div style={{ fontSize: '.75rem', color: 'var(--text)', fontWeight: 600 }}>{sellZone}</div>
+            </div>
           </div>
-          <div style={{ background: 'rgba(240,64,96,.07)', border: '1px solid rgba(240,64,96,.2)', borderRadius: 7, padding: '5px 8px' }}>
-            <div style={{ fontSize: '.62rem', color: 'var(--red)', fontWeight: 700, marginBottom: 2 }}>▼ אזור מכירה</div>
-            <div style={{ fontSize: '.75rem', color: 'var(--text)', fontWeight: 600 }}>{sellZone}</div>
-          </div>
+          {extraInfo && (
+            <p style={{ fontSize: '.7rem', color: 'var(--blue)', marginTop: 7, background: 'rgba(59,130,246,.07)', borderRadius: 6, padding: '4px 8px', lineHeight: 1.4 }}>
+              💡 {extraInfo}
+            </p>
+          )}
         </div>
-        {extraInfo && (
-          <p style={{ fontSize: '.7rem', color: 'var(--blue)', marginTop: 7, background: 'rgba(59,130,246,.07)', borderRadius: 6, padding: '4px 8px', lineHeight: 1.4 }}>
-            💡 {extraInfo}
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 }

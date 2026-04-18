@@ -1,7 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Bell, Sun, Moon, ScanLine, DollarSign,
-  Briefcase, Radar, BarChart2, Search
+  Briefcase, Radar, BarChart2, Search, BookOpen, Globe,
+  PanelRight, PanelTop,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getNotifications, markAllRead, scanPortfolio, getCurrencies } from '../api/client';
@@ -136,17 +137,19 @@ function QuickSearch() {
 }
 
 /* ─── Main Navbar ─── */
-function Navbar({ notifications, onScan, scanning }: {
+function Navbar({ notifications, onScan, scanning, navSide, toggleNavSide }: {
   notifications: Notification[];
   onScan: () => void;
   scanning: boolean;
+  navSide: 'top' | 'right';
+  toggleNavSide: () => void;
 }) {
   const { theme, toggle } = useTheme();
   const [showNotifs, setShowNotifs] = useState(false);
   const unread = notifications.filter(n => !n.read).length;
 
   return (
-    <nav className="navbar">
+    <nav className={navSide === 'right' ? 'navbar navbar-right-side' : 'navbar'}>
       {/* Logo */}
       <div className="navbar-logo">
         <div className="logo-icon">
@@ -173,6 +176,14 @@ function Navbar({ notifications, onScan, scanning }: {
           <Search size={15} />
           <span>חיפוש מניה</span>
         </NavLink>
+        <NavLink to="/indicators" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <BookOpen size={15} />
+          <span>מדריך מדדים</span>
+        </NavLink>
+        <NavLink to="/market" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <Globe size={15} />
+          <span>שוק כללי</span>
+        </NavLink>
       </div>
 
       {/* Right controls */}
@@ -187,6 +198,16 @@ function Navbar({ notifications, onScan, scanning }: {
                 style={{ borderColor: 'var(--green)', borderTopColor: 'transparent' }} />
             : <ScanLine size={14} />}
           <span className="hidden sm:inline">סרוק תיק</span>
+        </button>
+
+        {/* Nav side toggle */}
+        <button
+          onClick={toggleNavSide}
+          className="btn btn-sm btn-ghost"
+          title={navSide === 'top' ? 'העבר תפריט לצד ימין' : 'החזר תפריט למעלה'}
+          style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          {navSide === 'top' ? <PanelRight size={14} /> : <PanelTop size={14} />}
         </button>
 
         {/* Theme toggle */}
@@ -221,6 +242,8 @@ function Navbar({ notifications, onScan, scanning }: {
 }
 
 /* ─── Main Layout ─── */
+const NAV_SIDE_KEY = 'nav_side_pref';
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>(
     () => loadCache<Notification[]>(CACHE_KEY_NOTIFS) ?? []
@@ -229,6 +252,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     () => loadCache<CurrencyRates>(CACHE_KEY_CURRENCIES) ?? {}
   );
   const [scanning, setScanning] = useState(false);
+  const [navSide, setNavSide] = useState<'top' | 'right'>(
+    () => (localStorage.getItem(NAV_SIDE_KEY) as 'top' | 'right') ?? 'top'
+  );
+
+  const toggleNavSide = () => {
+    setNavSide(s => {
+      const next = s === 'top' ? 'right' : 'top';
+      localStorage.setItem(NAV_SIDE_KEY, next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const loadNotifs = () =>
@@ -262,15 +296,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="app-shell">
-      <Navbar notifications={notifications} onScan={handleScan} scanning={scanning} />
-      <CurrencyTicker currencies={currencies} />
-      <main className="main-content">
-        {children}
-      </main>
-      <footer className="app-footer">
-        נתונים: Yahoo Finance · אינם ייעוץ השקעות · מדד זיו — מעקב דיוק פנימי
-      </footer>
+    <div className={`app-shell ${navSide === 'right' ? 'nav-right' : ''}`}>
+      <Navbar
+        notifications={notifications}
+        onScan={handleScan}
+        scanning={scanning}
+        navSide={navSide}
+        toggleNavSide={toggleNavSide}
+      />
+      <div className="below-nav">
+        <CurrencyTicker currencies={currencies} />
+        <main className="main-content">
+          {children}
+        </main>
+        <footer className="app-footer">
+          נתונים: Yahoo Finance · אינם ייעוץ השקעות · מדד זיו — מעקב דיוק פנימי
+        </footer>
+      </div>
     </div>
   );
 }

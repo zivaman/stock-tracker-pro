@@ -141,6 +141,8 @@ export interface StockInfo {
   website: string;
   country: string;
   currency: string;
+  employees?: number | null;
+  revenue?: number | null;
 }
 
 export interface StockDetail {

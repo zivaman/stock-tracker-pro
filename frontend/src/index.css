@@ -72,6 +72,73 @@ body {
   min-height: 100vh;
 }
 
+/* ─── RIGHT-NAV LAYOUT ─── */
+.app-shell.nav-right {
+  flex-direction: row;
+}
+
+.app-shell.nav-right .navbar.navbar-right-side {
+  position: fixed;
+  top: 0; right: 0; bottom: 0; left: auto;
+  width: 220px;
+  height: 100vh;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1rem 0.75rem;
+  border-bottom: none;
+  border-left: 1px solid var(--border);
+  gap: 0.25rem;
+  overflow-y: auto;
+}
+
+.app-shell.nav-right .navbar.navbar-right-side .navbar-logo {
+  padding: 0.5rem 0;
+  margin-bottom: 0.75rem;
+  width: 100%;
+}
+
+.app-shell.nav-right .navbar.navbar-right-side .navbar-links {
+  flex-direction: column;
+  width: 100%;
+  margin-right: 0;
+  gap: 0.15rem;
+  flex: none;
+}
+
+.app-shell.nav-right .navbar.navbar-right-side .navbar-links .nav-link {
+  width: 100%;
+}
+
+.app-shell.nav-right .navbar.navbar-right-side .navbar-right {
+  flex-direction: column;
+  width: 100%;
+  margin-right: 0;
+  margin-top: auto;
+  padding-top: 1rem;
+  gap: 0.4rem;
+}
+
+.app-shell.nav-right .navbar.navbar-right-side .navbar-right form {
+  width: 100%;
+}
+
+.app-shell.nav-right .navbar.navbar-right-side .navbar-right form input {
+  width: 100% !important;
+}
+
+.app-shell.nav-right .below-nav {
+  margin-right: 220px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ─── Default (top nav) below-nav wrapper ─── */
+.below-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
 /* ─── NAVBAR ─── */
 .navbar {
   position: fixed;
@@ -336,14 +403,23 @@ body {
 
 /* ─── MAIN CONTENT ─── */
 .main-content {
-  margin-top: calc(var(--navbar-h) + var(--ticker-h));
   flex: 1;
-  padding: calc(var(--navbar-h) + var(--ticker-h) + 1.75rem) 1.5rem 2rem;
+  padding: 1.75rem 1.5rem 2rem;
   max-width: 1440px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
   overflow-y: auto;
+}
+
+/* Top-nav: push content below the fixed navbar + ticker */
+.app-shell:not(.nav-right) .below-nav {
+  padding-top: calc(var(--navbar-h) + var(--ticker-h));
+}
+
+/* Right-nav: no top offset needed (no fixed top bar) */
+.app-shell.nav-right .below-nav {
+  padding-top: 0;
 }
 
 /* ─── FOOTER ─── */

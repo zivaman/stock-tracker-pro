@@ -32,4 +32,15 @@ export const evaluateZivRecord = (id: number) => api.post(`/ziv-index/evaluate/$
 export const autoEvaluateZiv = () => api.post('/ziv-index/auto-evaluate').then(r => r.data);
 export const deleteZivRecord = (id: number) => api.delete(`/ziv-index/${id}`).then(r => r.data);
 
+// Chat
+export const chatWithStock = (data: { symbol: string; question: string; history?: any[]; context_data?: any }) =>
+  api.post('/chat', data).then(r => r.data);
+
+// Intraday
+export const getIntradayData = (symbol: string, interval: '15m' | '30m' | '1h') =>
+  api.get(`/stock/${symbol}/intraday`, { params: { interval } }).then(r => r.data);
+
+// Market overview
+export const getMarketOverview = () => api.get('/market/overview').then(r => r.data);
+
 export default api;

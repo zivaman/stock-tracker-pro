@@ -6,6 +6,8 @@ import Radar from './pages/Radar';
 import StockDetail from './pages/StockDetail';
 import ZivIndex from './pages/ZivIndex';
 import Search from './pages/Search';
+import IndicatorsGuide from './pages/IndicatorsGuide';
+import MarketDashboard from './pages/MarketDashboard';
 
 export default function App() {
   return (
@@ -18,6 +20,8 @@ export default function App() {
             <Route path="/stock/:symbol" element={<StockDetail />} />
             <Route path="/ziv-index" element={<ZivIndex />} />
             <Route path="/search" element={<Search />} />
+            <Route path="/indicators" element={<IndicatorsGuide />} />
+            <Route path="/market" element={<MarketDashboard />} />
           </Routes>
         </Layout>
       </BrowserRouter>
