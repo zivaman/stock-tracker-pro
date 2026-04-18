@@ -374,7 +374,13 @@ export default function StockDetailPage() {
 
         {/* Chart */}
         <Panel title="גרף מחיר" icon={BarChart2} color="var(--blue)">
-          <CandlestickChart symbol={data.symbol} data={data.price_history} fibonacci={data.fibonacci} showFib={true} />
+          <CandlestickChart
+            symbol={data.symbol}
+            data={data.price_history}
+            fibonacci={data.fibonacci}
+            showFib={true}
+            supportResistance={data.support_resistance}
+          />
         </Panel>
 
         {/* Signal + Score */}
