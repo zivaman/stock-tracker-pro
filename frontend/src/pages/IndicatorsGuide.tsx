@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronUp, Info, TrendingUp, Activity, BarChart2, Layers } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { ChevronDown, ChevronUp, Info, TrendingUp, Activity, BarChart2, Layers, Search, Loader2 } from 'lucide-react';
+import { getStockDetail } from '../api/client';
+import type { StockDetail } from '../types';
 
 interface IndicatorDetail {
   key: string;
@@ -246,6 +248,310 @@ function IndicatorCard({ ind }: { ind: IndicatorDetail }) {
   );
 }
 
+/* ─── Live Stock Snapshot ─── */
+
+interface Row {
+  key: string;
+  label: string;
+  value: string | null;
+  status: 'buy' | 'sell' | 'neutral' | 'none';
+  note: string;
+}
+
+function statusColor(s: Row['status']) {
+  if (s === 'buy')     return 'var(--green)';
+  if (s === 'sell')    return 'var(--red)';
+  if (s === 'neutral') return 'var(--yellow)';
+  return 'var(--text2)';
+}
+function statusLabel(s: Row['status']) {
+  if (s === 'buy')     return '▲ קנייה';
+  if (s === 'sell')    return '▼ מכירה';
+  if (s === 'neutral') return '◆ ניטרלי';
+  return '—';
+}
+
+function buildRows(d: StockDetail): Row[] {
+  const sig = d.signal;
+  const price = d.current_price;
+  const rows: Row[] = [];
+
+  // RSI
+  const rsi = sig.rsi;
+  rows.push({
+    key: 'rsi', label: 'RSI (14)',
+    value: rsi != null ? rsi.toFixed(1) : null,
+    status: rsi == null ? 'none' : rsi < 30 ? 'buy' : rsi < 45 ? 'buy' : rsi >= 70 ? 'sell' : 'neutral',
+    note: rsi == null ? '' : rsi < 30 ? 'Oversold — קנייה חזקה' : rsi < 45 ? 'אזור קנייה' : rsi >= 70 ? 'Overbought — שקול מכירה' : 'ניטרלי',
+  });
+
+  // MACD
+  const macd = sig.macd;
+  const macdSig = sig.macd_signal;
+  rows.push({
+    key: 'macd', label: 'MACD',
+    value: macd != null ? macd.toFixed(3) : null,
+    status: macd == null || macdSig == null ? 'none' : macd > macdSig ? 'buy' : 'sell',
+    note: macd == null || macdSig == null ? '' : macd > macdSig ? `מעל קו האות (${macdSig?.toFixed(3)}) — מומנטום חיובי` : `מתחת לקו האות (${macdSig?.toFixed(3)}) — לחץ שלילי`,
+  });
+
+  // SMA20
+  const sma20 = sig.sma20;
+  rows.push({
+    key: 'sma20', label: 'SMA 20',
+    value: sma20 != null ? `$${sma20.toFixed(2)}` : null,
+    status: sma20 == null ? 'none' : price > sma20 ? 'buy' : 'sell',
+    note: sma20 == null ? '' : price > sma20 ? `מחיר ($${price}) מעל SMA20` : `מחיר ($${price}) מתחת לSMA20`,
+  });
+
+  // SMA50
+  const sma50 = sig.sma50;
+  rows.push({
+    key: 'sma50', label: 'SMA 50',
+    value: sma50 != null ? `$${sma50.toFixed(2)}` : null,
+    status: sma50 == null ? 'none' : price > sma50 ? 'buy' : 'sell',
+    note: sma50 == null ? '' : price > sma50 ? `מחיר ($${price}) מעל SMA50 — מגמה בינונית חיובית` : `מחיר ($${price}) מתחת לSMA50 — חולשה`,
+  });
+
+  // SMA150
+  const sma150 = (sig as any).sma150 as number | null | undefined;
+  rows.push({
+    key: 'sma150', label: 'SMA 150',
+    value: sma150 != null ? `$${sma150.toFixed(2)}` : null,
+    status: sma150 == null ? 'none' : price > sma150 ? 'buy' : 'sell',
+    note: sma150 == null ? '' : price > sma150 ? `מחיר מעל SMA150 — מגמה בינונית-ארוכה חיובית` : `מחיר מתחת ל-SMA150 — חולשה`,
+  });
+
+  // SMA200
+  const sma200 = sig.sma200;
+  rows.push({
+    key: 'sma200', label: 'SMA 200',
+    value: sma200 != null ? `$${sma200.toFixed(2)}` : null,
+    status: sma200 == null ? 'none' : price > sma200 ? 'buy' : 'sell',
+    note: sma200 == null ? '' : price > sma200 ? `מגמה ארוכת-טווח חיובית` : `מגמת ירידה ארוכת-טווח`,
+  });
+
+  // Bollinger Bands
+  const bbU = sig.bb_upper; const bbL = sig.bb_lower; const bbM = sig.bb_middle;
+  let bbStatus: Row['status'] = 'none';
+  let bbNote = '';
+  if (bbU != null && bbL != null && bbM != null) {
+    const range = bbU - bbL;
+    const pos = range > 0 ? (price - bbL) / range : 0.5;
+    bbStatus = pos < 0.2 ? 'buy' : pos > 0.8 ? 'sell' : 'neutral';
+    bbNote = pos < 0.2 ? `ליד הבנד התחתון ($${bbL.toFixed(2)}) — אזור קנייה` : pos > 0.8 ? `ליד הבנד העליון ($${bbU.toFixed(2)}) — מתוח` : `במרכז הבנד ($${bbM.toFixed(2)})`;
+  }
+  rows.push({ key: 'bb', label: 'Bollinger Bands', value: bbU != null ? `$${bbL?.toFixed(2)} – $${bbU?.toFixed(2)}` : null, status: bbStatus, note: bbNote });
+
+  // Stochastic
+  const stK = sig.stoch_k; const stD = sig.stoch_d;
+  rows.push({
+    key: 'stoch', label: 'Stochastic %K',
+    value: stK != null ? stK.toFixed(1) : null,
+    status: stK == null ? 'none' : stK < 20 ? 'buy' : stK > 80 ? 'sell' : 'neutral',
+    note: stK == null ? '' : stK < 20 ? `Oversold — הזדמנות קנייה` : stK > 80 ? `Overbought — שקול מכירה` : `ניטרלי (D=${stD?.toFixed(1)})`,
+  });
+
+  // P/E
+  const pe = sig.pe_ratio;
+  rows.push({
+    key: 'pe', label: 'מכפיל רווח P/E',
+    value: pe != null ? pe.toFixed(1) : null,
+    status: pe == null ? 'none' : pe < 15 ? 'buy' : pe < 25 ? 'neutral' : 'sell',
+    note: pe == null ? '' : pe < 15 ? 'זול — P/E מתחת ל-15' : pe < 25 ? 'הוגן — P/E 15-25' : pe < 35 ? 'יקר — P/E מעל 25' : 'יקר מאוד — P/E מעל 35',
+  });
+
+  return rows;
+}
+
+function StockSnapshot() {
+  const [symbol, setSymbol] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<StockDetail | null>(null);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const load = async (sym?: string) => {
+    const s = (sym ?? symbol).trim().toUpperCase();
+    if (!s) return;
+    setLoading(true);
+    setError('');
+    setData(null);
+    try {
+      const res = await getStockDetail(s);
+      setData(res);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'סימבול לא נמצא');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rows = data ? buildRows(data) : [];
+  const sig = data?.signal;
+
+  const SIGNAL_CFG: Record<string, { label: string; color: string }> = {
+    strong_buy: { label: '▲▲ קנייה חזקה', color: 'var(--green)' },
+    buy:        { label: '▲ קנייה',        color: 'var(--green)' },
+    watch:      { label: '◆ שים לב',       color: 'var(--yellow)' },
+    neutral:    { label: '● ניטרלי',       color: 'var(--muted)' },
+    sell:       { label: '▼ מכירה',        color: 'var(--red)' },
+  };
+
+  return (
+    <div style={{
+      background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14,
+      padding: '1.2rem', marginBottom: '1.5rem',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem' }}>
+        <Search size={15} style={{ color: 'var(--blue)' }} />
+        <span style={{ fontWeight: 700, fontSize: '.92rem', color: 'var(--text)' }}>
+          סנפשוט מניה — בדוק איפה המניה עומדת עכשיו
+        </span>
+      </div>
+
+      {/* Search bar */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: '1rem' }}>
+        <input
+          ref={inputRef}
+          value={symbol}
+          onChange={e => setSymbol(e.target.value.toUpperCase())}
+          onKeyDown={e => e.key === 'Enter' && load()}
+          placeholder="הכנס סימבול (AAPL, MSFT...)"
+          style={{
+            flex: 1, background: 'var(--card2)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '0.5rem 0.85rem', fontSize: '.85rem',
+            color: 'var(--text)', outline: 'none', direction: 'ltr',
+          }}
+        />
+        <button
+          onClick={() => load()}
+          disabled={loading || !symbol.trim()}
+          style={{
+            padding: '0.5rem 1.2rem', borderRadius: 8, fontWeight: 700,
+            background: 'var(--blue)', color: '#fff', border: 'none',
+            cursor: loading || !symbol.trim() ? 'not-allowed' : 'pointer',
+            opacity: !symbol.trim() ? 0.5 : 1, fontSize: '.85rem',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          {loading ? <Loader2 size={14} className="spin" /> : <Search size={14} />}
+          {loading ? 'טוען...' : 'בדוק'}
+        </button>
+      </div>
+
+      {/* Quick picks */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: '1rem' }}>
+        {['AAPL','MSFT','NVDA','TSLA','GOOGL','AMZN','META','NFLX'].map(s => (
+          <button key={s} onClick={() => { setSymbol(s); load(s); }}
+            style={{
+              fontSize: '.68rem', padding: '3px 10px', borderRadius: 6,
+              border: '1px solid var(--border)', background: 'var(--card2)',
+              color: 'var(--text2)', cursor: 'pointer',
+            }}>{s}</button>
+        ))}
+      </div>
+
+      {error && (
+        <div style={{ fontSize: '.8rem', color: 'var(--red)', padding: '0.5rem 0.75rem', background: 'rgba(240,64,96,.08)', borderRadius: 8 }}>
+          ⚠ {error}
+        </div>
+      )}
+
+      {data && sig && (
+        <div>
+          {/* Stock header */}
+          <div style={{
+            background: 'var(--card2)', borderRadius: 10, padding: '0.85rem 1rem',
+            marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 8,
+          }}>
+            <div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text)' }}>
+                {data.symbol} — {data.name}
+              </div>
+              <div style={{ fontSize: '.75rem', color: 'var(--muted)', marginTop: 2 }}>
+                {data.info?.sector} | {data.info?.industry}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)' }}>
+                ${data.current_price.toFixed(2)}
+              </div>
+              <div style={{ fontSize: '.75rem', color: 'var(--muted)' }}>מחיר נוכחי</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: SIGNAL_CFG[sig.signal]?.color || 'var(--text)' }}>
+                {sig.score}
+              </div>
+              <div style={{ fontSize: '.7rem', color: 'var(--muted)' }}>ציון / 100</div>
+            </div>
+            <div style={{
+              padding: '6px 14px', borderRadius: 8, fontWeight: 700, fontSize: '.8rem',
+              background: `${SIGNAL_CFG[sig.signal]?.color}22`,
+              color: SIGNAL_CFG[sig.signal]?.color,
+              border: `1px solid ${SIGNAL_CFG[sig.signal]?.color}44`,
+            }}>
+              {SIGNAL_CFG[sig.signal]?.label ?? sig.signal}
+            </div>
+          </div>
+
+          {/* Indicator table */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.8rem', direction: 'rtl' }}>
+              <thead>
+                <tr style={{ background: 'var(--card2)' }}>
+                  {['מדד', 'ערך נוכחי', 'סטטוס', 'פרשנות'].map(h => (
+                    <th key={h} style={{ padding: '0.55rem 0.85rem', textAlign: 'right', color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, i) => (
+                  <tr key={row.key} style={{ borderTop: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                    <td style={{ padding: '0.55rem 0.85rem', fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap' }}>{row.label}</td>
+                    <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                      {row.value ?? <span style={{ color: 'var(--muted)' }}>—</span>}
+                    </td>
+                    <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>
+                      {row.status !== 'none' ? (
+                        <span style={{
+                          fontSize: '.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+                          background: `${statusColor(row.status)}22`,
+                          color: statusColor(row.status),
+                        }}>
+                          {statusLabel(row.status)}
+                        </span>
+                      ) : <span style={{ color: 'var(--muted)', fontSize: '.7rem' }}>—</span>}
+                    </td>
+                    <td style={{ padding: '0.55rem 0.85rem', color: 'var(--muted)', fontSize: '.75rem' }}>{row.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Reasons / warnings */}
+          {(sig.reasons.length > 0 || sig.warnings.length > 0) && (
+            <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {sig.reasons.slice(0, 4).map((r, i) => (
+                <div key={i} style={{ fontSize: '.75rem', color: 'var(--text2)', background: 'rgba(0,200,150,.06)', border: '1px solid rgba(0,200,150,.15)', borderRadius: 7, padding: '0.45rem 0.75rem' }}>
+                  ✓ {r}
+                </div>
+              ))}
+              {sig.warnings.slice(0, 3).map((w, i) => (
+                <div key={i} style={{ fontSize: '.75rem', color: 'var(--text2)', background: 'rgba(240,64,96,.06)', border: '1px solid rgba(240,64,96,.15)', borderRadius: 7, padding: '0.45rem 0.75rem' }}>
+                  ⚠ {w}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function IndicatorsGuide() {
   const totalWeight = INDICATORS.reduce((s, i) => s + i.weight, 0);
 
@@ -292,6 +598,9 @@ export default function IndicatorsGuide() {
           </span>
         </div>
       </div>
+
+      {/* Live stock snapshot */}
+      <StockSnapshot />
 
       {/* Weights summary table */}
       <div style={{

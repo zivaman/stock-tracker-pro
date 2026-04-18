@@ -267,6 +267,7 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
                 "volume": int(row["Volume"]),
                 "sma20":  r(row.get("SMA20", float("nan"))),
                 "sma50":  r(row.get("SMA50", float("nan"))),
+                "sma150": r(row.get("SMA150", float("nan"))),
                 "sma200": r(row.get("SMA200", float("nan"))),
                 "bb_upper": r(row.get("BB_Upper", float("nan"))),
                 "bb_lower": r(row.get("BB_Lower", float("nan"))),

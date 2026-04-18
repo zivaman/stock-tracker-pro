@@ -68,12 +68,14 @@ export default function CandlestickChart({ symbol, data, fibonacci, showFib = tr
   const volRef        = useRef<ISeriesApi<'Histogram'> | null>(null);
   const sma20Ref      = useRef<ISeriesApi<'Line'> | null>(null);
   const sma50Ref      = useRef<ISeriesApi<'Line'> | null>(null);
+  const sma150Ref     = useRef<ISeriesApi<'Line'> | null>(null);
   const sma200Ref     = useRef<ISeriesApi<'Line'> | null>(null);
   const drawnLineRefs = useRef<Map<string, any>>(new Map());
 
   const [range, setRange] = useState<Range>('3m');
   const [showSMA20, setShowSMA20] = useState(true);
   const [showSMA50, setShowSMA50] = useState(true);
+  const [showSMA150, setShowSMA150] = useState(true);
   const [showSMA200, setShowSMA200] = useState(true);
   const [showFibLines, setShowFibLines] = useState(showFib);
   const [drawMode, setDrawMode] = useState(false);
@@ -126,15 +128,17 @@ export default function CandlestickChart({ symbol, data, fibonacci, showFib = tr
     });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
-    const sma20s = chart.addSeries(LineSeries, { color: '#60a5fa', lineWidth: 1, title: 'SMA20', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    const sma50s = chart.addSeries(LineSeries, { color: '#f97316', lineWidth: 1, title: 'SMA50', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    const sma20s  = chart.addSeries(LineSeries, { color: '#60a5fa', lineWidth: 1, title: 'SMA20',  priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    const sma50s  = chart.addSeries(LineSeries, { color: '#f97316', lineWidth: 1, title: 'SMA50',  priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    const sma150s = chart.addSeries(LineSeries, { color: '#10b981', lineWidth: 1, title: 'SMA150', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     const sma200s = chart.addSeries(LineSeries, { color: '#a855f7', lineWidth: 1, title: 'SMA200', priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
 
     chartRef.current = chart;
     candleRef.current = candleSeries;
     volRef.current = volSeries;
-    sma20Ref.current = sma20s;
-    sma50Ref.current = sma50s;
+    sma20Ref.current  = sma20s;
+    sma50Ref.current  = sma50s;
+    sma150Ref.current = sma150s;
     sma200Ref.current = sma200s;
 
     // Click handler for drawing
@@ -206,20 +210,23 @@ export default function CandlestickChart({ symbol, data, fibonacci, showFib = tr
       time: d.date as any, value: d.volume,
       color: d.close >= d.open ? 'rgba(0,200,150,0.3)' : 'rgba(240,64,96,0.3)',
     }));
-    const sma20d: LineData[] = slice.filter(d => d.sma20 != null).map(d => ({ time: d.date as any, value: d.sma20! }));
-    const sma50d: LineData[] = slice.filter(d => d.sma50 != null).map(d => ({ time: d.date as any, value: d.sma50! }));
+    const sma20d:  LineData[] = slice.filter(d => d.sma20  != null).map(d => ({ time: d.date as any, value: d.sma20! }));
+    const sma50d:  LineData[] = slice.filter(d => d.sma50  != null).map(d => ({ time: d.date as any, value: d.sma50! }));
+    const sma150d: LineData[] = slice.filter(d => d.sma150 != null).map(d => ({ time: d.date as any, value: d.sma150! }));
     const sma200d: LineData[] = slice.filter(d => d.sma200 != null).map(d => ({ time: d.date as any, value: d.sma200! }));
 
     candleRef.current.setData(candles);
     volRef.current.setData(vols);
     sma20Ref.current?.setData(sma20d);
     sma50Ref.current?.setData(sma50d);
+    sma150Ref.current?.setData(sma150d);
     sma200Ref.current?.setData(sma200d);
     chartRef.current?.timeScale().fitContent();
   }, [range, data, intradayData, getActiveData]);
 
   useEffect(() => { sma20Ref.current?.applyOptions({ visible: showSMA20 }); }, [showSMA20]);
   useEffect(() => { sma50Ref.current?.applyOptions({ visible: showSMA50 }); }, [showSMA50]);
+  useEffect(() => { sma150Ref.current?.applyOptions({ visible: showSMA150 }); }, [showSMA150]);
   useEffect(() => { sma200Ref.current?.applyOptions({ visible: showSMA200 }); }, [showSMA200]);
 
   // Fibonacci lines
@@ -285,8 +292,9 @@ export default function CandlestickChart({ symbol, data, fibonacci, showFib = tr
 
         {/* Toggles */}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          <button style={btn(showSMA20, '#60a5fa')} onClick={() => setShowSMA20(s => !s)}>SMA20</button>
-          <button style={btn(showSMA50, '#f97316')} onClick={() => setShowSMA50(s => !s)}>SMA50</button>
+          <button style={btn(showSMA20, '#60a5fa')}  onClick={() => setShowSMA20(s => !s)}>SMA20</button>
+          <button style={btn(showSMA50, '#f97316')}  onClick={() => setShowSMA50(s => !s)}>SMA50</button>
+          <button style={btn(showSMA150, '#10b981')} onClick={() => setShowSMA150(s => !s)}>SMA150</button>
           <button style={btn(showSMA200, '#a855f7')} onClick={() => setShowSMA200(s => !s)}>SMA200</button>
           {fibonacci?.levels && (
             <button style={btn(showFibLines, '#eab308')} onClick={() => setShowFibLines(s => !s)}>פיב׳</button>

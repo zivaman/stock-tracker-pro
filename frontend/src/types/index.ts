@@ -89,6 +89,7 @@ export interface PricePoint {
   volume: number;
   sma20: number | null;
   sma50: number | null;
+  sma150: number | null;
   sma200: number | null;
   bb_upper: number | null;
   bb_lower: number | null;
@@ -108,6 +109,7 @@ export interface SignalData {
   macd_signal: number | null;
   sma20: number | null;
   sma50: number | null;
+  sma150?: number | null;
   sma200: number | null;
   bb_upper: number | null;
   bb_lower: number | null;

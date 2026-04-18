@@ -13,6 +13,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # Moving Averages
     df["SMA20"] = close.rolling(20).mean()
     df["SMA50"] = close.rolling(50).mean()
+    df["SMA150"] = close.rolling(150).mean()
     df["SMA200"] = close.rolling(200).mean()
     df["EMA12"] = close.ewm(span=12, adjust=False).mean()
     df["EMA26"] = close.ewm(span=26, adjust=False).mean()
@@ -141,6 +142,7 @@ def compute_signal(df: pd.DataFrame, pe_ratio: Optional[float] = None) -> Dict[s
     close = latest["Close"]
     sma20 = latest.get("SMA20")
     sma50 = latest.get("SMA50")
+    sma150 = latest.get("SMA150")
     sma200 = latest.get("SMA200")
 
     if sma50 and not pd.isna(sma50):
@@ -150,6 +152,14 @@ def compute_signal(df: pd.DataFrame, pe_ratio: Optional[float] = None) -> Dict[s
         else:
             score -= 8
             warnings.append(f"מחיר (${close:.2f}) מתחת לממוצע 50 יום (${sma50:.2f}) — חולשה לטווח בינוני. SMA50 הפך להתנגדות")
+
+    if sma150 and not pd.isna(sma150):
+        if close > sma150:
+            score += 6
+            reasons.append(f"מחיר (${close:.2f}) מעל ממוצע 150 יום (${sma150:.2f}) — מגמה בינונית-ארוכה חיובית")
+        else:
+            score -= 5
+            warnings.append(f"מחיר (${close:.2f}) מתחת לממוצע 150 יום (${sma150:.2f}) — חולשה לטווח בינוני-ארוך")
 
     if sma200 and not pd.isna(sma200):
         if close > sma200:
@@ -249,6 +259,7 @@ def compute_signal(df: pd.DataFrame, pe_ratio: Optional[float] = None) -> Dict[s
         "macd_signal": round(macd_sig, 4) if not pd.isna(pd.Series([macd_sig])).iloc[0] else None,
         "sma20": round(sma20, 2) if sma20 is not None and not pd.isna(sma20) else None,
         "sma50": round(sma50, 2) if sma50 is not None and not pd.isna(sma50) else None,
+        "sma150": round(sma150, 2) if sma150 is not None and not pd.isna(sma150) else None,
         "sma200": round(sma200, 2) if sma200 is not None and not pd.isna(sma200) else None,
         "bb_upper": round(bb_upper, 2) if bb_upper is not None and not pd.isna(bb_upper) else None,
         "bb_lower": round(bb_lower, 2) if bb_lower is not None and not pd.isna(bb_lower) else None,
