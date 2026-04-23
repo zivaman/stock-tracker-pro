@@ -9,6 +9,7 @@ import { getStockDetail, addZivRecord, addPosition } from '../api/client';
 import CandlestickChart from '../components/CandlestickChart';
 import TechnicalAnalysis from '../components/TechnicalAnalysis';
 import StockChat from '../components/StockChat';
+import AIInsights from '../components/AIInsights';
 import type { StockDetail as StockDetailType } from '../types';
 
 /* ─── Helpers ─── */
@@ -382,6 +383,9 @@ export default function StockDetailPage() {
             supportResistance={data.support_resistance}
           />
         </Panel>
+
+        {/* AI Insights */}
+        <AIInsights stock={data} />
 
         {/* Signal + Score */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

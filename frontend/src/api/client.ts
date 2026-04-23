@@ -43,4 +43,11 @@ export const getIntradayData = (symbol: string, interval: '15m' | '30m' | '1h') 
 // Market overview
 export const getMarketOverview = () => api.get('/market/overview').then(r => r.data);
 
+// AI Insights (Claude-powered, with prompt caching)
+export const getAIInsights = (data: {
+  symbol: string; name: string; current_price: number;
+  sector?: string; signal?: any; info?: any;
+  performance?: any; support_resistance?: any; fibonacci?: any;
+}) => api.post('/ai/insights', data, { timeout: 30000 }).then(r => r.data);
+
 export default api;
