@@ -713,13 +713,15 @@ export default function StockDetailPage() {
         />
       )}
 
-      {/* LLM Chat — floating */}
+      {/* LLM Chat — floating, full context */}
       <StockChat
         symbol={data.symbol}
         currentPrice={data.current_price}
         signal={data.signal}
-        sector={data.info?.sector}
-        name={data.name}
+        info={data.info}
+        performance={data.performance}
+        supportResistance={data.support_resistance}
+        fibonacci={data.fibonacci}
       />
     </div>
   );
