@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 import os
 
@@ -18,7 +20,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,11 +43,18 @@ app.include_router(ai_insights.router)
 app.include_router(settings.router)
 
 
-@app.get("/")
-def root():
-    return {"status": "ok", "message": "Stock Tracker API is running"}
-
-
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+
+# ── Serve React frontend (production build) ──
+_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+if os.path.isdir(_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(_dist, "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str):
+        """Catch-all: serve index.html for all non-API routes (React Router)."""
+        index = os.path.join(_dist, "index.html")
+        return FileResponse(index)
