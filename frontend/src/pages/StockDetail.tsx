@@ -5,11 +5,14 @@ import {
   BarChart2, Activity, Building2, Globe, ExternalLink,
   AlertCircle, Target, Users, Shield, Newspaper, Sun
 } from 'lucide-react';
-import { getStockDetail, addZivRecord, addPosition } from '../api/client';
+import { getStockDetail, addZivRecord, addPosition, getChartPatterns } from '../api/client';
 import CandlestickChart from '../components/CandlestickChart';
 import TechnicalAnalysis from '../components/TechnicalAnalysis';
 import StockChat from '../components/StockChat';
 import AIInsights from '../components/AIInsights';
+import InstitutionalHoldings from '../components/InstitutionalHoldings';
+import PolymarketSentiment from '../components/PolymarketSentiment';
+import NewsSentiment from '../components/NewsSentiment';
 import type { StockDetail as StockDetailType } from '../types';
 
 /* ─── Helpers ─── */
@@ -30,8 +33,8 @@ function Panel({ title, icon: Icon, color = 'var(--blue)', action, children }: {
   title: string; icon?: any; color?: string; action?: React.ReactNode; children: React.ReactNode;
 }) {
   return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
-      <div style={{ height: 3, background: color }} />
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'visible' }}>
+      <div style={{ height: 3, background: color, borderRadius: '14px 14px 0 0' }} />
       <div style={{ padding: '0.85rem 1.1rem 0.6rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {Icon && <Icon size={13} style={{ color }} />}
@@ -222,6 +225,7 @@ export default function StockDetailPage() {
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [portfolioMsg, setPortfolioMsg] = useState('');
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [chartPatterns, setChartPatterns] = useState<any[]>([]);
 
   const fetchData = async () => {
     if (!symbol) return;
@@ -229,7 +233,14 @@ export default function StockDetailPage() {
     try {
       const d = await getStockDetail(symbol);
       if (d.error) setError(d.error);
-      else { setData(d); setLastRefresh(new Date()); }
+      else {
+        setData(d);
+        setLastRefresh(new Date());
+        // Fetch chart patterns in parallel (non-blocking)
+        getChartPatterns(symbol, '6m')
+          .then(pd => setChartPatterns(pd?.patterns ?? []))
+          .catch(() => {});
+      }
     } catch (e: any) { setError(e.message || 'שגיאה בטעינת נתונים'); }
     finally { setLoading(false); }
   };
@@ -374,13 +385,32 @@ export default function StockDetailPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem' }}>
 
         {/* Chart */}
-        <Panel title="גרף מחיר" icon={BarChart2} color="var(--blue)">
+        <Panel
+          title="גרף מחיר"
+          icon={BarChart2}
+          color="var(--blue)"
+          action={
+            <button
+              onClick={() => window.open(`/chart/${data.symbol}`, '_blank')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: 'transparent', border: '1px solid var(--border)',
+                borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
+                color: 'var(--muted)', fontSize: '.68rem', fontWeight: 600,
+              }}
+              title="פתח גרף בעמוד נפרד"
+            >
+              <ExternalLink size={11} /> פתח בעמוד נפרד
+            </button>
+          }
+        >
           <CandlestickChart
             symbol={data.symbol}
             data={data.price_history}
             fibonacci={data.fibonacci}
             showFib={true}
             supportResistance={data.support_resistance}
+            patterns={chartPatterns}
           />
         </Panel>
 
@@ -652,6 +682,27 @@ export default function StockDetailPage() {
           </div>
         </Panel>
       )}
+
+      {/* ══════════════════════════════════
+          ROW — INSTITUTIONAL HOLDINGS (13F)
+      ══════════════════════════════════ */}
+      <Panel title="אחזקות מוסדיות — 13F" icon={BarChart2} color="var(--blue)">
+        <InstitutionalHoldings symbol={data.symbol} sector={data.info?.sector} />
+      </Panel>
+
+      {/* ══════════════════════════════════
+          ROW — POLYMARKET SENTIMENT
+      ══════════════════════════════════ */}
+      <Panel title="Polymarket — שוק הניבויים" icon={Globe} color="#6366f1">
+        <PolymarketSentiment symbol={data.symbol} companyName={data.name} />
+      </Panel>
+
+      {/* ══════════════════════════════════
+          ROW — NEWS SENTIMENT
+      ══════════════════════════════════ */}
+      <Panel title="סנטימנט מדיה — Bloomberg · Reuters · CNBC" icon={Newspaper} color="var(--blue)">
+        <NewsSentiment symbol={data.symbol} companyName={data.name} />
+      </Panel>
 
       {/* Modals */}
       {showAddPortfolio && (

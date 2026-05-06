@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, Cell,
+  Tooltip, ResponsiveContainer, ReferenceLine, ComposedChart, Bar, Cell,
 } from 'recharts';
 import type { PricePoint, SignalData } from '../types';
 
@@ -134,6 +134,51 @@ function RSIChart({ data }: { data: PricePoint[] }) {
   );
 }
 
+/* ─── Volume Chart ─── */
+function VolumeChart({ data }: { data: PricePoint[] }) {
+  const raw = data.slice(-60);
+  const maxVol = raw.length ? Math.max(...raw.map(d => d.volume)) : 0;
+  const fmt = (v: number) => v >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v);
+  // Merge 20-day volume MA into each data point
+  const recent = raw.map((d, i, arr) => {
+    const win = arr.slice(Math.max(0, i - 19), i + 1);
+    return { ...d, volMA20: Math.round(win.reduce((s, x) => s + x.volume, 0) / win.length) };
+  });
+  return (
+    <div>
+      <h4 style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>
+        Volume — נפח מסחר (60 ימים)
+      </h4>
+      <div style={{ height: 100 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={recent} margin={{ top: 2, right: 5, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+            <XAxis dataKey="date" hide />
+            <YAxis tickFormatter={fmt} tick={{ fontSize: 9, fill: '#64748b' }} width={34} />
+            <Tooltip
+              formatter={(v: number) => [fmt(v), 'Volume']}
+              contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', fontSize: 11 }}
+              labelStyle={{ color: 'var(--text2)' }}
+            />
+            <Bar dataKey="volume" maxBarSize={10} radius={[2, 2, 0, 0]}>
+              {recent.map((d, i) => (
+                <Cell key={i} fill={d.close >= d.open ? 'rgba(0,200,150,0.55)' : 'rgba(240,64,96,0.55)'} />
+              ))}
+            </Bar>
+            <Line type="monotone" dataKey="volMA20" stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls name="Vol MA20" />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div style={{ display: 'flex', gap: 12, fontSize: '.65rem', marginTop: 3 }}>
+        <span style={{ color: 'var(--green)' }}>■ יום עולה</span>
+        <span style={{ color: 'var(--red)' }}>■ יום יורד</span>
+        <span style={{ color: '#f59e0b' }}>── MA20 נפח</span>
+        <span style={{ color: 'var(--muted)' }}>מקסימום: {fmt(maxVol)}</span>
+      </div>
+    </div>
+  );
+}
+
 /* ─── MACD Chart ─── */
 function MACDChart({ data }: { data: PricePoint[] }) {
   const recent = data.slice(-60).filter(d => d.macd != null);
@@ -142,7 +187,7 @@ function MACDChart({ data }: { data: PricePoint[] }) {
       <h4 style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>MACD (12,26,9) — גרף היסטורי</h4>
       <div style={{ height: 90 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={recent} margin={{ top: 2, right: 5, left: 0, bottom: 0 }}>
+          <ComposedChart data={recent} margin={{ top: 2, right: 5, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
             <XAxis dataKey="date" hide />
             <YAxis tick={{ fontSize: 9, fill: '#64748b' }} width={30} />
@@ -156,7 +201,7 @@ function MACDChart({ data }: { data: PricePoint[] }) {
             </Bar>
             <Line type="monotone" dataKey="macd" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls name="MACD" />
             <Line type="monotone" dataKey="macd_signal" stroke="#f04060" strokeWidth={1.5} dot={false} strokeDasharray="4 2" connectNulls name="Signal" />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
       <div style={{ display: 'flex', gap: 12, fontSize: '.65rem', marginTop: 3 }}>
@@ -164,6 +209,77 @@ function MACDChart({ data }: { data: PricePoint[] }) {
         <span style={{ color: '#f04060' }}>- - Signal</span>
         <span style={{ color: 'var(--muted)' }}>■ Histogram</span>
       </div>
+    </div>
+  );
+}
+
+/* ─── ADX Chart ─── */
+interface ADXPoint { date: string; adx: number | null; plus_di: number | null; minus_di: number | null; }
+function ADXChart({ signal }: { signal: SignalData }) {
+  // Single-point snapshot — build a sparkline-style display from last known values
+  if (signal.adx == null) return null;
+  const adx     = signal.adx;
+  const plusDI  = signal.plus_di  ?? 0;
+  const minusDI = signal.minus_di ?? 0;
+  const adxColor = adx >= 50 ? '#f59e0b' : adx >= 25 ? '#3b82f6' : 'var(--muted)';
+  const bars = [
+    { label: 'ADX',  value: adx,     color: adxColor,  max: 100 },
+    { label: '+DI',  value: plusDI,  color: '#00c896', max: 60  },
+    { label: '−DI',  value: minusDI, color: '#f04060', max: 60  },
+  ];
+  return (
+    <div>
+      <h4 style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+        ADX (14) — עוצמת מגמה נוכחית
+      </h4>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {bars.map(b => (
+          <div key={b.label}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: '.75rem', fontWeight: 700, color: b.color }}>{b.label}</span>
+              <span className="num" style={{ fontSize: '.8rem', fontWeight: 800, color: b.color }}>{b.value.toFixed(1)}</span>
+            </div>
+            <div style={{ height: 7, background: 'rgba(255,255,255,0.06)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 4,
+                width: `${Math.min((b.value / b.max) * 100, 100)}%`,
+                background: b.color,
+                transition: 'width .6s ease',
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Legend row */}
+      <div style={{ display: 'flex', gap: 14, fontSize: '.65rem', marginTop: 10, flexWrap: 'wrap' }}>
+        <span style={{ color: adxColor }}>ADX: {adx >= 50 ? 'מגמה חזקה מאוד' : adx >= 25 ? 'מגמה ברורה' : adx >= 20 ? 'מגמה מתגבשת' : 'ללא מגמה'}</span>
+        <span style={{ color: '#00c896' }}>+DI = לחץ קנייה</span>
+        <span style={{ color: '#f04060' }}>−DI = לחץ מכירה</span>
+        <span style={{ color: 'var(--muted)' }}>סף מגמה: ADX &gt; 25</span>
+      </div>
+      {/* DI comparison bar */}
+      {(plusDI > 0 || minusDI > 0) && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: '.68rem', color: 'var(--muted)', marginBottom: 4 }}>לחץ קנייה vs מכירה (+DI / −DI)</div>
+          <div style={{ height: 10, background: 'rgba(255,255,255,0.06)', borderRadius: 5, overflow: 'hidden', display: 'flex' }}>
+            <div style={{
+              height: '100%',
+              width: `${(plusDI / (plusDI + minusDI)) * 100}%`,
+              background: 'rgba(0,200,150,0.7)',
+              transition: 'width .6s ease',
+            }} />
+            <div style={{
+              height: '100%',
+              width: `${(minusDI / (plusDI + minusDI)) * 100}%`,
+              background: 'rgba(240,64,96,0.7)',
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.62rem', marginTop: 3 }}>
+            <span style={{ color: '#00c896' }}>+DI {((plusDI / (plusDI + minusDI)) * 100).toFixed(0)}%</span>
+            <span style={{ color: '#f04060' }}>−DI {((minusDI / (plusDI + minusDI)) * 100).toFixed(0)}%</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -210,6 +326,36 @@ export default function TechnicalAnalysis({ signal, history, peRatio }: Props) {
     !peRatio ? 'neutral' :
     peRatio < 15 ? 'buy' : peRatio < 25 ? 'neutral' :
     peRatio < 35 ? 'watch' : 'sell';
+
+  // ADX status (+DI vs -DI with ADX strength gate)
+  const adx      = signal.adx     ?? null;
+  const plusDI   = signal.plus_di ?? null;
+  const minusDI  = signal.minus_di ?? null;
+  const adxStatus: 'buy' | 'sell' | 'neutral' | 'watch' =
+    adx == null || adx < 20           ? 'neutral' :   // no clear trend
+    adx < 25                          ? 'watch'   :   // weak trend forming
+    plusDI != null && minusDI != null
+      ? plusDI > minusDI              ? 'buy'     : 'sell'
+      : 'neutral';
+  // Value shown: ADX number + direction emoji
+  const adxValueLabel = adx != null
+    ? `${adx.toFixed(1)}${plusDI != null && minusDI != null ? (plusDI > minusDI ? ' ▲' : ' ▼') : ''}`
+    : null;
+  const adxStrength = adx == null ? '' : adx >= 50 ? 'מגמה חזקה מאוד' : adx >= 25 ? 'מגמה ברורה' : adx >= 20 ? 'מגמה מתגבשת' : 'ללא מגמה';
+
+  // Volume / OBV status
+  const volRatio = signal.vol_ratio ?? null;
+  const volStatus: 'buy' | 'sell' | 'neutral' | 'watch' =
+    volRatio == null ? 'neutral' :
+    volRatio >= 1.5 ? 'buy' :
+    volRatio >= 1.0 ? 'watch' :
+    volRatio < 0.5 ? 'sell' : 'neutral';
+  const volValueLabel = volRatio != null ? `${volRatio.toFixed(2)}x` : null;
+
+  // Latest volume absolute value for display
+  const latestVol = latest?.volume;
+  const fmtVol = (v: number) =>
+    v >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(v);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -299,6 +445,19 @@ export default function TechnicalAnalysis({ signal, history, peRatio }: Props) {
           extraInfo="כיווץ הרצועות (Squeeze) מסמן פיצוץ פוטנציאלי — מחכה לבחירת כיוון"
         />
 
+        {adx != null && (
+          <IndicatorCard
+            title="ADX — עוצמת מגמה"
+            subtitle={`Average Directional Index (14)${adxStrength ? ` · ${adxStrength}` : ''}`}
+            currentValue={adxValueLabel}
+            currentStatus={adxStatus}
+            buyZone="+DI > −DI ו-ADX > 25 = מגמה עולה ברורה — כניסה לפוזיציית Long"
+            sellZone="−DI > +DI ו-ADX > 25 = מגמה יורדת ברורה — שקול מכירה"
+            explanation={`ADX מודד את עוצמת המגמה (0–100) ללא קשר לכיוונה. הקו +DI מייצג לחץ קנייה, −DI מייצג לחץ מכירה. כאשר ADX > 25 קיימת מגמה ברורה — הכיוון נקבע ע״י ההשוואה בין +DI ל-−DI. ADX < 20 = שוק בוקע/ללא כיוון, עדיף להמתין.${plusDI != null && minusDI != null ? ` · +DI: ${plusDI.toFixed(1)} / −DI: ${minusDI.toFixed(1)}` : ''}`}
+            extraInfo={`שילוב ADX > 25 עם MACD Crossover = אישור מגמה חזק במיוחד`}
+          />
+        )}
+
         {(peRatio ?? null) !== null && (
           <IndicatorCard
             title="P/E — מכפיל רווח"
@@ -311,6 +470,17 @@ export default function TechnicalAnalysis({ signal, history, peRatio }: Props) {
             extraInfo="השווה P/E לממוצע הסקטור ולהיסטוריה של החברה — P/E לא עובד בוואקום"
           />
         )}
+
+        <IndicatorCard
+          title="Volume — נפח מסחר"
+          subtitle={`יחס נפח נוכחי / ממוצע 20 יום${latestVol ? ` · ${fmtVol(latestVol)}` : ''}`}
+          currentValue={volValueLabel}
+          currentStatus={volStatus}
+          buyZone="נפח גבוה מ-1.5× הממוצע בעלייה — אישור מגמה חיובי"
+          sellZone="נפח גבוה מ-1.5× הממוצע בירידה — לחץ מכירה משמעותי"
+          explanation="נפח מסחר גבוה בכיוון העלייה מאשר שהמגמה נתמכת ע״י שחקנים מוסדיים. נפח נמוך בתנועה מסמן חוסר אמון בשוק. נפח יחסי >1.5x עם עלייה = איתות קנייה חזק. נפח חלש <0.5x = שוק לא משוכנע."
+          extraInfo={signal.obv != null ? `OBV נוכחי: ${signal.obv > 0 ? '+' : ''}${(signal.obv / 1e6).toFixed(1)}M — ${(signal.obv ?? 0) > 0 ? 'לחץ קנייה מצטבר' : 'לחץ מכירה מצטבר'}` : undefined}
+        />
       </div>
 
       {/* ── RSI Chart ── */}
@@ -321,6 +491,18 @@ export default function TechnicalAnalysis({ signal, history, peRatio }: Props) {
       {/* ── MACD Chart ── */}
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '1rem' }}>
         <MACDChart data={history} />
+      </div>
+
+      {/* ── ADX Panel ── */}
+      {signal.adx != null && (
+        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '1rem' }}>
+          <ADXChart signal={signal} />
+        </div>
+      )}
+
+      {/* ── Volume Chart ── */}
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: '1rem' }}>
+        <VolumeChart data={history} />
       </div>
     </div>
   );

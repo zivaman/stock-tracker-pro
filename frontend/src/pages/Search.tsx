@@ -5,7 +5,8 @@ import {
   BarChart2, ExternalLink, X, Loader, Building2, Globe,
   Users, Target, Activity, ChevronLeft
 } from 'lucide-react';
-import { getStockDetail, addPosition, addZivRecord } from '../api/client';
+import { getStockDetail, addPosition, addZivRecord, searchSymbols } from '../api/client';
+import type { SearchResult } from '../api/client';
 import type { StockDetail } from '../types';
 
 /* ─── Popular suggestions ─── */
@@ -140,7 +141,11 @@ export default function Search() {
   const [error, setError] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [addedMsg, setAddedMsg] = useState('');
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  const [sugLoading, setSugLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sugTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -148,10 +153,28 @@ export default function Search() {
     if (q) doSearch(q);
   }, []);
 
+  // Live autocomplete while typing
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    if (sugTimer.current) clearTimeout(sugTimer.current);
+    setSugLoading(true);
+    sugTimer.current = setTimeout(async () => {
+      try {
+        const res = await searchSymbols(q);
+        setSuggestions(res);
+        setShowSuggestions(res.length > 0);
+      } catch { /* ignore */ }
+      finally { setSugLoading(false); }
+    }, 300);
+    return () => { if (sugTimer.current) clearTimeout(sugTimer.current); };
+  }, [query]);
+
   const doSearch = async (sym: string) => {
     const s = sym.trim().toUpperCase();
     if (!s) return;
     setQuery(s); setLoading(true); setError(''); setResult(null); setAddedMsg('');
+    setShowSuggestions(false); setSuggestions([]);
     try {
       const data = await getStockDetail(s);
       setResult(data);
@@ -193,7 +216,7 @@ export default function Search() {
       {/* ─── Search Header ─── */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--text)', marginBottom: 6 }}>חיפוש מניה</h1>
-        <p style={{ fontSize: '.85rem', color: 'var(--text2)' }}>חפש לפי סימול (ticker) — AAPL, TSLA, NVDA ...</p>
+        <p style={{ fontSize: '.85rem', color: 'var(--text2)' }}>חפש לפי שם חברה או סימול — Apple, NVIDIA, TSLA...</p>
       </div>
 
       {/* ─── Search Box ─── */}
@@ -202,28 +225,62 @@ export default function Search() {
         style={{ display: 'flex', gap: 10, marginBottom: '1.5rem' }}
       >
         <div style={{ flex: 1, position: 'relative' }}>
-          <SearchIcon size={17} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+          <SearchIcon size={17} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', zIndex: 1 }} />
           <input
             ref={inputRef}
             type="text"
             value={query}
-            onChange={e => setQuery(e.target.value.toUpperCase())}
-            placeholder="הקלד סימול מניה... AAPL, MSFT, NVDA"
+            onChange={e => { setQuery(e.target.value); setShowSuggestions(true); }}
+            placeholder="הקלד שם חברה או סימול... Apple, NVDA, Tesla"
             style={{
               width: '100%', background: 'var(--card)', border: '2px solid var(--border)',
-              borderRadius: 12, padding: '0.85rem 1rem 0.85rem 3rem',
+              borderRadius: showSuggestions && suggestions.length > 0 ? '12px 12px 0 0' : 12,
+              padding: '0.85rem 1rem 0.85rem 3rem',
               color: 'var(--text)', fontSize: '1rem', outline: 'none',
               transition: 'border-color .15s', direction: 'ltr',
               fontFamily: "'JetBrains Mono', monospace", letterSpacing: '.5px',
             }}
-            onFocus={e => (e.currentTarget.style.borderColor = 'var(--blue)')}
-            onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+            onFocus={e => { e.currentTarget.style.borderColor = 'var(--blue)'; setShowSuggestions(true); }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'var(--border)'; setTimeout(() => setShowSuggestions(false), 150); }}
           />
+          {sugLoading && (
+            <div style={{ position: 'absolute', left: 40, top: '50%', transform: 'translateY(-50%)' }}>
+              <Loader size={14} className="spin" style={{ color: 'var(--blue)' }} />
+            </div>
+          )}
           {query && (
-            <button type="button" onClick={() => { setQuery(''); setResult(null); setError(''); inputRef.current?.focus(); }}
+            <button type="button" onClick={() => { setQuery(''); setResult(null); setError(''); setSuggestions([]); inputRef.current?.focus(); }}
               style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}>
               <X size={15} />
             </button>
+          )}
+          {/* ── Autocomplete dropdown ── */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+              background: 'var(--card)', border: '2px solid var(--blue)',
+              borderTop: 'none', borderRadius: '0 0 12px 12px',
+              overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,.4)',
+            }}>
+              {suggestions.slice(0, 8).map(s => (
+                <button
+                  key={s.symbol}
+                  type="button"
+                  onMouseDown={() => doSearch(s.symbol)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '0.6rem 1rem', background: 'transparent', border: 'none',
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--card2)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '.85rem', color: 'var(--blue)', width: 70, flexShrink: 0, textAlign: 'left' }}>{s.symbol}</span>
+                  <span style={{ fontSize: '.8rem', color: 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                  <span style={{ fontSize: '.65rem', color: 'var(--muted)', flexShrink: 0 }}>{s.exchange}</span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
         <button type="submit" disabled={loading || !query.trim()} className="btn-primary" style={{ padding: '0.85rem 1.5rem', fontSize: '.9rem', gap: 8 }}>

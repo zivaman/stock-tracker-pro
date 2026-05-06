@@ -3,10 +3,25 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 import datetime
+import yfinance as yf
 from ..database import get_db, PortfolioPosition, Notification
 from ..services.stock_service import get_current_price, get_historical_data
 from ..services.technical_analysis import calculate_indicators, compute_signal
 import numpy as np
+
+# Simple in-process sector cache (avoids re-fetching on every portfolio load)
+_sector_cache: dict = {}
+
+def get_sector(symbol: str) -> str:
+    if symbol in _sector_cache:
+        return _sector_cache[symbol]
+    try:
+        info = yf.Ticker(symbol).info
+        sector = info.get("sector") or "אחר"
+        _sector_cache[symbol] = sector
+        return sector
+    except Exception:
+        return "אחר"
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -95,6 +110,7 @@ def get_portfolio(db: Session = Depends(get_db)):
             "id": p.id,
             "symbol": p.symbol,
             "name": p.name,
+            "sector": get_sector(p.symbol),
             "buy_price": p.buy_price,
             "buy_date": p.buy_date,
             "quantity": p.quantity,

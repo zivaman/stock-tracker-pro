@@ -8,22 +8,31 @@ import ZivIndex from './pages/ZivIndex';
 import Search from './pages/Search';
 import IndicatorsGuide from './pages/IndicatorsGuide';
 import MarketDashboard from './pages/MarketDashboard';
+import ChartPage from './pages/ChartPage';
 
 export default function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Portfolio />} />
-            <Route path="/radar" element={<Radar />} />
-            <Route path="/stock/:symbol" element={<StockDetail />} />
-            <Route path="/ziv-index" element={<ZivIndex />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/indicators" element={<IndicatorsGuide />} />
-            <Route path="/market" element={<MarketDashboard />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          {/* Standalone chart page — no nav bar */}
+          <Route path="/chart/:symbol" element={<ChartPage />} />
+
+          {/* All other pages inside the Layout */}
+          <Route path="*" element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Portfolio />} />
+                <Route path="/radar" element={<Radar />} />
+                <Route path="/stock/:symbol" element={<StockDetail />} />
+                <Route path="/ziv-index" element={<ZivIndex />} />
+                <Route path="/search" element={<Search />} />
+                <Route path="/indicators" element={<IndicatorsGuide />} />
+                <Route path="/market" element={<MarketDashboard />} />
+              </Routes>
+            </Layout>
+          } />
+        </Routes>
       </BrowserRouter>
     </ThemeProvider>
   );

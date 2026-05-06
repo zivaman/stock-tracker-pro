@@ -5,10 +5,10 @@ import os
 
 # Load .env from backend directory (two levels up from this file)
 _env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-load_dotenv(_env_path)
+load_dotenv(_env_path, override=True)
 
 from .database import create_tables
-from .routes import portfolio, radar, stocks, ziv_index, chat, market, ai_insights
+from .routes import portfolio, radar, stocks, ziv_index, chat, market, ai_insights, settings
 
 app = FastAPI(
     title="Stock Tracker API",
@@ -38,6 +38,7 @@ app.include_router(ziv_index.router)
 app.include_router(chat.router)
 app.include_router(market.router)
 app.include_router(ai_insights.router)
+app.include_router(settings.router)
 
 
 @app.get("/")

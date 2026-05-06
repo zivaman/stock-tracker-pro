@@ -51,6 +51,21 @@ def get_stock_info(symbol: str) -> Dict[str, Any]:
             "analyst_count": safe_val(info.get("numberOfAnalystOpinions")),
             "short_ratio": safe_val(info.get("shortRatio")),
             "held_percent_institutions": safe_val(info.get("heldPercentInstitutions")),
+            # ── Extended fundamentals ──
+            "forward_pe":      safe_val(info.get("forwardPE")),
+            "peg_ratio":       safe_val(info.get("pegRatio")),
+            "price_to_book":   safe_val(info.get("priceToBook")),
+            "return_on_equity": safe_val(info.get("returnOnEquity")),
+            "return_on_assets": safe_val(info.get("returnOnAssets")),
+            "debt_to_equity":  safe_val(info.get("debtToEquity")),
+            "current_ratio":   safe_val(info.get("currentRatio")),
+            "quick_ratio":     safe_val(info.get("quickRatio")),
+            "eps_ttm":         safe_val(info.get("trailingEps")),
+            "eps_forward":     safe_val(info.get("forwardEps")),
+            "price_to_sales":  safe_val(info.get("priceToSalesTrailing12Months")),
+            "ev_to_ebitda":    safe_val(info.get("enterpriseToEbitda")),
+            "payout_ratio":    safe_val(info.get("payoutRatio")),
+            "book_value":      safe_val(info.get("bookValue")),
         }
     except Exception as e:
         return {"symbol": symbol.upper(), "name": symbol, "error": str(e)}
@@ -244,7 +259,22 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
         # Pass P/E for fundamental scoring
         raw_info = yf.Ticker(symbol).info
         pe_ratio = safe_val(raw_info.get("trailingPE"))
-        signal_data = compute_signal(df_ind, pe_ratio=pe_ratio)
+        fundamentals = {
+            "forward_pe":       safe_val(raw_info.get("forwardPE")),
+            "peg_ratio":        safe_val(raw_info.get("pegRatio")),
+            "price_to_book":    safe_val(raw_info.get("priceToBook")),
+            "earnings_growth":  safe_val(raw_info.get("earningsGrowth")),
+            "revenue_growth":   safe_val(raw_info.get("revenueGrowth")),
+            "profit_margins":   safe_val(raw_info.get("profitMargins")),
+            "operating_margins":safe_val(raw_info.get("operatingMargins")),
+            "return_on_equity": safe_val(raw_info.get("returnOnEquity")),
+            "return_on_assets": safe_val(raw_info.get("returnOnAssets")),
+            "debt_to_equity":   safe_val(raw_info.get("debtToEquity")),
+            "current_ratio":    safe_val(raw_info.get("currentRatio")),
+            "eps_ttm":          safe_val(raw_info.get("trailingEps")),
+            "eps_forward":      safe_val(raw_info.get("forwardEps")),
+        }
+        signal_data = compute_signal(df_ind, pe_ratio=pe_ratio, fundamentals=fundamentals)
         fibonacci = compute_fibonacci(df_ind)
         sr = get_support_resistance(df_ind)
         price_ranges = get_price_ranges(df)

@@ -9,11 +9,14 @@ interface Insights {
   confidence: number;
   price_target_3m: number | null;
   upside_pct: number | null;
+  trend_assessment?: string;
   opportunity: string;
   risk: string;
   catalysts: string[];
   technical_view: string;
   fundamental_view: string;
+  eps_analysis?: string;
+  valuation_grade?: string;
   time_horizon: string;
   sector_context: string;
   _tokens?: { input: number; output: number; cache_read: number; cache_write: number };
@@ -215,6 +218,38 @@ export default function AIInsights({ stock }: Props) {
             )}
           </div>
 
+          {/* Trend Meter */}
+          {insights.trend_assessment && (() => {
+            const trendMap: Record<string, { color: string; pct: number; label: string }> = {
+              'Bullish חזק':   { color: '#00c896', pct: 90, label: '📈 Bullish חזק' },
+              'Bullish':        { color: '#3b82f6', pct: 68, label: '🟢 Bullish' },
+              'ניטראלי':       { color: '#f5c518', pct: 50, label: '⚖ ניטראלי' },
+              'Bearish':        { color: '#f97316', pct: 32, label: '🔴 Bearish' },
+              'Bearish חזק':   { color: '#f04060', pct: 10, label: '📉 Bearish חזק' },
+            };
+            const t = trendMap[insights.trend_assessment] ?? { color: '#f5c518', pct: 50, label: insights.trend_assessment };
+            return (
+              <div style={{ background: 'var(--card2)', borderRadius: 10, padding: '0.75rem 1rem', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--muted)' }}>מד מגמה Bearish → Bullish</span>
+                  <span style={{ fontSize: '.75rem', fontWeight: 800, color: t.color }}>{t.label}</span>
+                </div>
+                <div style={{ position: 'relative', height: 10, background: 'linear-gradient(to right, #f04060, #f97316, #f5c518, #3b82f6, #00c896)', borderRadius: 5 }}>
+                  <div style={{
+                    position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)',
+                    left: `${t.pct}%`, width: 16, height: 16, borderRadius: '50%',
+                    background: t.color, border: '2px solid var(--card)', boxShadow: `0 0 6px ${t.color}`,
+                  }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <span style={{ fontSize: '.6rem', color: '#f04060' }}>Bearish חזק</span>
+                  <span style={{ fontSize: '.6rem', color: '#f5c518' }}>ניטראלי</span>
+                  <span style={{ fontSize: '.6rem', color: '#00c896' }}>Bullish חזק</span>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Summary */}
           <div style={{ background: 'var(--card2)', borderRadius: 10, padding: '0.85rem 1rem', border: '1px solid var(--border)' }}>
             <div style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--muted)', marginBottom: 6 }}>
@@ -273,6 +308,32 @@ export default function AIInsights({ stock }: Props) {
               <p style={{ fontSize: '.75rem', color: 'var(--text2)', lineHeight: 1.6 }}>{insights.fundamental_view}</p>
             </div>
           </div>
+
+          {/* EPS Analysis + Valuation Grade */}
+          {(insights.eps_analysis || insights.valuation_grade) && (
+            <div style={{ display: 'grid', gridTemplateColumns: insights.eps_analysis && insights.valuation_grade ? '1fr auto' : '1fr', gap: 8 }}>
+              {insights.eps_analysis && (
+                <div style={{ borderRadius: 8, padding: '0.65rem 0.85rem', background: 'var(--card2)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: '.62rem', color: '#f5c518', fontWeight: 700, marginBottom: 5 }}>💰 ניתוח EPS</div>
+                  <p style={{ fontSize: '.75rem', color: 'var(--text2)', lineHeight: 1.6 }}>{insights.eps_analysis}</p>
+                </div>
+              )}
+              {insights.valuation_grade && (() => {
+                const gradeColor: Record<string, string> = { A: '#00c896', B: '#3b82f6', C: '#f5c518', D: '#f97316', F: '#f04060' };
+                const g = insights.valuation_grade.charAt(0);
+                const color = gradeColor[g] ?? '#f5c518';
+                return (
+                  <div style={{ borderRadius: 8, padding: '0.65rem 0.85rem', background: 'var(--card2)', border: `1px solid ${color}44`, textAlign: 'center', minWidth: 80 }}>
+                    <div style={{ fontSize: '.62rem', color: 'var(--muted)', fontWeight: 700, marginBottom: 4 }}>תמחור</div>
+                    <div style={{ fontSize: '2rem', fontWeight: 900, color, lineHeight: 1 }}>{g}</div>
+                    <div style={{ fontSize: '.62rem', color: 'var(--muted)', marginTop: 4 }}>
+                      {g === 'A' ? 'זול מאוד' : g === 'B' ? 'הוגן' : g === 'C' ? 'ניטראלי' : g === 'D' ? 'יקר' : 'יקר מאוד'}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {/* Sector context */}
           {insights.sector_context && (

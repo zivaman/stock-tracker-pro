@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { PlusCircle, RefreshCw, TrendingUp, TrendingDown, DollarSign, Briefcase, WifiOff, Search, X, ChevronLeft, Loader2 } from 'lucide-react';
-import { getPortfolio, addPosition, removePosition, getStockDetail } from '../api/client';
+import { getPortfolio, addPosition, removePosition, getStockDetail, searchSymbols } from '../api/client';
+import type { SearchResult } from '../api/client';
 import PortfolioCard from '../components/PortfolioCard';
+import AIPortfolioAnalysis from '../components/AIPortfolioAnalysis';
 import type { PortfolioPosition, PortfolioSummary } from '../types';
 
 const CACHE_KEY = 'cache_portfolio';
@@ -73,7 +75,6 @@ function StockPickerModal({ onAdd, onClose }: { onAdd: () => void; onClose: () =
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<{ symbol: string; name: string } | null>(null);
   const [searching, setSearching] = useState(false);
-  const [searchResult, setSearchResult] = useState<{ symbol: string; name: string } | null>(null);
   const [searchError, setSearchError] = useState('');
 
   // Step 2 form
@@ -85,41 +86,42 @@ function StockPickerModal({ onAdd, onClose }: { onAdd: () => void; onClose: () =
   const [submitError, setSubmitError] = useState('');
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
-  const typedTicker = query.trim().toUpperCase();
-  const filtered = query.trim()
+  const typedQuery = query.trim();
+  // Local filter of popular stocks
+  const filtered = typedQuery
     ? POPULAR_STOCKS.filter(s =>
-        s.symbol.includes(typedTicker) ||
-        s.name.toLowerCase().includes(query.trim().toLowerCase())
+        s.symbol.toLowerCase().includes(typedQuery.toLowerCase()) ||
+        s.name.toLowerCase().includes(typedQuery.toLowerCase())
       )
     : POPULAR_STOCKS;
 
-  const isCustomTicker = typedTicker.length >= 1 && !POPULAR_STOCKS.some(s => s.symbol === typedTicker);
-
-  // Debounced custom ticker lookup
+  // Debounced live search
   useEffect(() => {
-    if (!isCustomTicker || typedTicker.length < 1) {
-      setSearchResult(null);
+    if (typedQuery.length < 2) {
+      setSearchResults([]);
       setSearchError('');
+      setSearching(false);
       return;
     }
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    setSearchResult(null);
+    setSearchResults([]);
     setSearchError('');
+    setSearching(true);
     searchTimer.current = setTimeout(async () => {
-      setSearching(true);
       try {
-        const detail = await getStockDetail(typedTicker);
-        setSearchResult({ symbol: typedTicker, name: detail.name || typedTicker });
+        const results = await searchSymbols(typedQuery);
+        setSearchResults(results);
+        if (results.length === 0) setSearchError(`לא נמצאו תוצאות עבור "${typedQuery}"`);
       } catch {
-        setSearchResult(null);
-        if (typedTicker.length >= 2) setSearchError(`לא נמצאה מניה: ${typedTicker}`);
+        setSearchError('שגיאה בחיפוש — נסה שוב');
       } finally {
         setSearching(false);
       }
-    }, 650);
+    }, 400);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [typedTicker, isCustomTicker]);
+  }, [typedQuery]);
 
   const handleSelect = async (stock: { symbol: string; name: string }) => {
     setSelected(stock);
@@ -215,24 +217,34 @@ function StockPickerModal({ onAdd, onClose }: { onAdd: () => void; onClose: () =
             </div>
 
             <div style={{ overflowY: 'auto', flex: 1, padding: '0.5rem' }}>
-              {/* Custom search result */}
-              {searchResult && isCustomTicker && (
+              {/* Live search results */}
+              {typedQuery.length >= 2 && searchResults.length > 0 && (
                 <div style={{ marginBottom: 4 }}>
-                  <p style={{ fontSize: '.65rem', color: 'var(--blue)', padding: '0.2rem 0.75rem 0.4rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>תוצאת חיפוש</p>
-                  <StockRow stock={searchResult} onSelect={handleSelect} />
-                  <div style={{ height: 1, background: 'var(--border)', margin: '0.5rem 0.75rem' }} />
+                  <p style={{ fontSize: '.65rem', color: 'var(--blue)', padding: '0.2rem 0.75rem 0.4rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                    תוצאות חיפוש ({searchResults.length})
+                  </p>
+                  {searchResults.map(s => (
+                    <StockRow key={s.symbol} stock={s} onSelect={handleSelect} />
+                  ))}
+                  {filtered.length > 0 && <div style={{ height: 1, background: 'var(--border)', margin: '0.5rem 0.75rem' }} />}
                 </div>
               )}
 
-              <p style={{ fontSize: '.65rem', color: 'var(--muted)', padding: '0.2rem 0.75rem 0.4rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                {query.trim() ? 'תוצאות' : 'מניות פופולריות'}
-              </p>
-              {filtered.length === 0 && !searchResult && !searching && (
+              {/* Popular / filtered list */}
+              {(typedQuery.length < 2 || filtered.length > 0) && (
+                <>
+                  <p style={{ fontSize: '.65rem', color: 'var(--muted)', padding: '0.2rem 0.75rem 0.4rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                    {typedQuery ? 'פופולריות מתאימות' : 'מניות פופולריות'}
+                  </p>
+                  {filtered.map(stock => (
+                    <StockRow key={stock.symbol} stock={stock} onSelect={handleSelect} />
+                  ))}
+                </>
+              )}
+
+              {typedQuery.length >= 2 && !searching && searchResults.length === 0 && filtered.length === 0 && (
                 <p style={{ fontSize: '.82rem', color: 'var(--text2)', padding: '1rem', textAlign: 'center' }}>לא נמצאו תוצאות</p>
               )}
-              {filtered.map(stock => (
-                <StockRow key={stock.symbol} stock={stock} onSelect={handleSelect} />
-              ))}
             </div>
           </>
         )}
@@ -432,6 +444,11 @@ export default function Portfolio() {
             <PortfolioCard key={p.symbol} position={p} onRemove={handleRemove} />
           ))}
         </div>
+      )}
+
+      {/* ── AI Portfolio Analysis ── */}
+      {summary && positions.length > 0 && (
+        <AIPortfolioAnalysis positions={positions} summary={summary} />
       )}
 
       {/* ── Portfolio Summary — BOTTOM ── */}

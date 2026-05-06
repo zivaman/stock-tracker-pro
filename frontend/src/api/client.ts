@@ -22,6 +22,33 @@ export const markAllRead = () => api.post('/radar/notifications/read-all').then(
 // Stocks
 export const getStockDetail = (symbol: string) => api.get(`/stock/${symbol}`).then(r => r.data);
 export const getStockNews = (symbol: string) => api.get(`/stock/${symbol}/news`).then(r => r.data);
+export const searchSymbols = (q: string) => api.get('/stock/search', { params: { q }, timeout: 8000 }).then(r => r.data as SearchResult[]);
+export const getInstitutional = (symbol: string) => api.get(`/stock/${symbol}/institutional`, { timeout: 25000 }).then(r => r.data);
+export const getPolymarketSentiment = (symbol: string, company: string) =>
+  api.get(`/stock/${symbol}/polymarket`, { params: { company }, timeout: 20000 }).then(r => r.data);
+export const getInsiderRecent = (symbol: string, days = 30) =>
+  api.get(`/stock/${symbol}/insider-recent`, { params: { days }, timeout: 15000 }).then(r => r.data);
+
+export const getChartPatterns = (symbol: string, period = '6m') =>
+  api.get(`/stock/${symbol}/chart-patterns`, { params: { period }, timeout: 15000 }).then(r => r.data);
+
+export const getNewsSentiment = (symbol: string, company: string) =>
+  api.get(`/stock/${symbol}/news-sentiment`, { params: { company }, timeout: 25000 }).then(r => r.data);
+
+export const explainInstitutional = (symbol: string, data: {
+  institution: string; action: string; pct_change: number | null;
+  stock_name: string; symbol: string; sector?: string;
+  shares?: number; value_usd?: number; pct_held?: number; date?: string;
+  sentiment_score?: number; n_increased?: number; n_decreased?: number;
+}) => api.post(`/stock/${symbol}/institutional/explain`, data, { timeout: 20000 }).then(r => r.data as { explanation: string; institution: string });
+
+export interface SearchResult {
+  symbol: string;
+  name: string;
+  exchange: string;
+  type: string;
+  sector: string;
+}
 
 // מדד זיו
 export const getZivIndex = () => api.get('/ziv-index').then(r => r.data);
@@ -49,5 +76,22 @@ export const getAIInsights = (data: {
   sector?: string; signal?: any; info?: any;
   performance?: any; support_resistance?: any; fibonacci?: any;
 }) => api.post('/ai/insights', data, { timeout: 30000 }).then(r => r.data);
+
+// AI Portfolio Analysis
+export const getAIPortfolioAnalysis = (data: {
+  positions: Array<{
+    symbol: string; name: string; sector?: string;
+    buy_price: number; current_price: number; quantity: number;
+    pnl_pct: number; invested: number; current_value: number;
+    ta_score?: number; ta_signal?: string; rsi?: number;
+  }>;
+  total_invested: number;
+  total_value: number;
+  total_pnl_pct: number;
+}) => api.post('/ai/portfolio-analysis', data, { timeout: 40000 }).then(r => r.data);
+
+// Settings
+export const getApiKeyStatus = () => api.get('/settings/apikey-status').then(r => r.data);
+export const saveApiKey = (api_key: string) => api.post('/settings/apikey', { api_key }).then(r => r.data);
 
 export default api;

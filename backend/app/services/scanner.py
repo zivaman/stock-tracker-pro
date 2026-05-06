@@ -32,6 +32,8 @@ CURRENCY_PAIRS = {
     "EUR/USD": "EURUSD=X",    # Euro → Dollar
     "GBP/USD": "GBPUSD=X",    # Pound → Dollar
     "USD/JPY": "JPY=X",       # Dollar → Yen
+    "BTC/USD": "BTC-USD",     # Bitcoin
+    "ETH/USD": "ETH-USD",     # Ethereum
 }
 
 

@@ -2,10 +2,10 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Bell, Sun, Moon, ScanLine, DollarSign,
   Briefcase, Radar, BarChart2, Search, BookOpen, Globe,
-  PanelRight, PanelTop,
+  PanelRight, PanelTop, Settings, Eye, EyeOff, CheckCircle, XCircle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { getNotifications, markAllRead, scanPortfolio, getCurrencies } from '../api/client';
+import { getNotifications, markAllRead, scanPortfolio, getCurrencies, getApiKeyStatus, saveApiKey } from '../api/client';
 import { useTheme } from '../ThemeContext';
 import type { Notification } from '../types';
 
@@ -34,10 +34,14 @@ function CurrencyTicker({ currencies }: { currencies: CurrencyRates }) {
       </span>
       {entries.map(([pair, data]) => {
         const pos = data.change_pct >= 0;
+        const rate = (pair.startsWith('BTC') || pair.startsWith('ETH'))
+          ? data.rate.toLocaleString('en-US', { maximumFractionDigits: 0 })
+          : data.rate.toFixed(4);
+        const prefix = pair.startsWith('BTC') ? '₿ ' : pair.startsWith('ETH') ? 'Ξ ' : '';
         return (
           <div key={pair} className="currency-item">
-            <span className="currency-pair">{pair}</span>
-            <span className="currency-rate">{data.rate.toFixed(4)}</span>
+            <span className="currency-pair">{prefix}{pair}</span>
+            <span className="currency-rate">{rate}</span>
             <span className="currency-change" style={{ color: pos ? 'var(--green)' : 'var(--red)' }}>
               {pos ? '+' : ''}{data.change_pct.toFixed(2)}%
             </span>
@@ -136,17 +140,177 @@ function QuickSearch() {
   );
 }
 
+/* ─── API Key Settings Modal ─── */
+function ApiKeyModal({ onClose }: { onClose: () => void }) {
+  const [key, setKey]           = useState('');
+  const [show, setShow]         = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [status, setStatus]     = useState<'idle' | 'ok' | 'err'>('idle');
+  const [msg, setMsg]           = useState('');
+  const [configured, setConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    getApiKeyStatus()
+      .then(d => setConfigured(d.configured))
+      .catch(() => setConfigured(false));
+  }, []);
+
+  const handleSave = async () => {
+    if (!key.trim()) return;
+    setSaving(true); setStatus('idle'); setMsg('');
+    try {
+      await saveApiKey(key.trim());
+      setStatus('ok');
+      setMsg('מפתח נשמר בהצלחה — כעת ניתן להשתמש ב-AI');
+      setConfigured(true);
+      setKey('');
+    } catch (e: any) {
+      setStatus('err');
+      setMsg(e.response?.data?.detail || 'שגיאה בשמירת המפתח');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 200, padding: '1rem',
+    }}>
+      <div style={{
+        background: 'var(--card)', border: '1px solid var(--border)',
+        borderRadius: 16, width: '100%', maxWidth: 440, overflow: 'hidden',
+      }}>
+        {/* Accent */}
+        <div style={{ height: 3, background: 'linear-gradient(90deg, #8b5cf6, #3b82f6)' }} />
+
+        {/* Header */}
+        <div style={{ padding: '1rem 1.2rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Settings size={15} style={{ color: '#8b5cf6' }} />
+            <span style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text)' }}>הגדרות AI</span>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '1.1rem', lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Status badge */}
+          {configured !== null && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '0.6rem 0.85rem', borderRadius: 9,
+              background: configured ? 'rgba(0,200,150,.08)' : 'rgba(240,64,96,.08)',
+              border: `1px solid ${configured ? 'rgba(0,200,150,.25)' : 'rgba(240,64,96,.25)'}`,
+            }}>
+              {configured
+                ? <CheckCircle size={14} style={{ color: 'var(--green)', flexShrink: 0 }} />
+                : <XCircle    size={14} style={{ color: 'var(--red)',   flexShrink: 0 }} />}
+              <span style={{ fontSize: '.78rem', color: configured ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+                {configured ? 'מפתח API מוגדר ופעיל' : 'מפתח API לא מוגדר — AI לא זמין'}
+              </span>
+            </div>
+          )}
+
+          <p style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.6 }}>
+            הזן מפתח Claude API מ-<strong style={{ color: 'var(--text)' }}>console.anthropic.com</strong>.
+            המפתח נשמר בשרת המקומי בלבד ולא מועבר לשום מקום אחר.
+          </p>
+
+          {/* Key input */}
+          <div>
+            <label style={{ fontSize: '.75rem', color: 'var(--text2)', display: 'block', marginBottom: 5, fontWeight: 600 }}>
+              Anthropic API Key
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={show ? 'text' : 'password'}
+                value={key}
+                onChange={e => setKey(e.target.value)}
+                placeholder="sk-ant-api03-..."
+                dir="ltr"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: 'var(--card2)', border: '1px solid var(--border)',
+                  borderRadius: 8, padding: '0.55rem 2.4rem 0.55rem 0.85rem',
+                  fontSize: '.82rem', color: 'var(--text)', outline: 'none',
+                  fontFamily: 'monospace',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShow(v => !v)}
+                style={{
+                  position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)',
+                  display: 'flex', alignItems: 'center',
+                }}
+              >
+                {show ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Feedback */}
+          {msg && (
+            <div style={{
+              fontSize: '.78rem', padding: '0.55rem 0.8rem', borderRadius: 8,
+              color: status === 'ok' ? 'var(--green)' : 'var(--red)',
+              background: status === 'ok' ? 'rgba(0,200,150,.08)' : 'rgba(240,64,96,.08)',
+              border: `1px solid ${status === 'ok' ? 'rgba(0,200,150,.25)' : 'rgba(240,64,96,.25)'}`,
+            }}>
+              {status === 'ok' ? '✓ ' : '⚠ '}{msg}
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={handleSave}
+              disabled={saving || !key.trim()}
+              style={{
+                flex: 1, padding: '0.6rem', borderRadius: 9, border: 'none', cursor: saving || !key.trim() ? 'not-allowed' : 'pointer',
+                background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)', color: '#fff',
+                fontWeight: 700, fontSize: '.85rem', opacity: saving || !key.trim() ? 0.6 : 1,
+              }}
+            >
+              {saving ? 'שומר...' : 'שמור מפתח'}
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                padding: '0.6rem 1rem', borderRadius: 9, border: '1px solid var(--border)',
+                background: 'var(--card2)', color: 'var(--text2)', fontWeight: 600, fontSize: '.85rem', cursor: 'pointer',
+              }}
+            >
+              סגור
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Navbar ─── */
-function Navbar({ notifications, onScan, scanning, navSide, toggleNavSide }: {
+function Navbar({ notifications, onScan, scanning, navSide, toggleNavSide, onOpenSettings }: {
   notifications: Notification[];
   onScan: () => void;
   scanning: boolean;
   navSide: 'top' | 'right';
   toggleNavSide: () => void;
+  onOpenSettings: () => void;
 }) {
   const { theme, toggle } = useTheme();
   const [showNotifs, setShowNotifs] = useState(false);
+  const [apiConfigured, setApiConfigured] = useState<boolean | null>(null);
   const unread = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    getApiKeyStatus().then(d => setApiConfigured(d.configured)).catch(() => setApiConfigured(false));
+  }, []);
 
   return (
     <nav className={navSide === 'right' ? 'navbar navbar-right-side' : 'navbar'}>
@@ -198,6 +362,22 @@ function Navbar({ notifications, onScan, scanning, navSide, toggleNavSide }: {
                 style={{ borderColor: 'var(--green)', borderTopColor: 'transparent' }} />
             : <ScanLine size={14} />}
           <span className="hidden sm:inline">סרוק תיק</span>
+        </button>
+
+        {/* Settings */}
+        <button
+          onClick={onOpenSettings}
+          className="btn btn-sm btn-ghost"
+          title="הגדרות AI"
+          style={{ display: 'flex', alignItems: 'center', gap: 4, position: 'relative' }}
+        >
+          <Settings size={14} style={{ color: apiConfigured === false ? 'var(--red)' : 'var(--muted)' }} />
+          {apiConfigured === false && (
+            <span style={{
+              position: 'absolute', top: 1, right: 1, width: 7, height: 7,
+              background: 'var(--red)', borderRadius: '50%', border: '1.5px solid var(--card)',
+            }} />
+          )}
         </button>
 
         {/* Nav side toggle */}
@@ -252,6 +432,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     () => loadCache<CurrencyRates>(CACHE_KEY_CURRENCIES) ?? {}
   );
   const [scanning, setScanning] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [navSide, setNavSide] = useState<'top' | 'right'>(
     () => (localStorage.getItem(NAV_SIDE_KEY) as 'top' | 'right') ?? 'top'
   );
@@ -303,7 +484,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         scanning={scanning}
         navSide={navSide}
         toggleNavSide={toggleNavSide}
+        onOpenSettings={() => setShowSettings(true)}
       />
+      {showSettings && <ApiKeyModal onClose={() => setShowSettings(false)} />}
       <div className="below-nav">
         <CurrencyTicker currencies={currencies} />
         <main className="main-content">
