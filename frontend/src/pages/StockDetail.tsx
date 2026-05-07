@@ -13,6 +13,7 @@ import AIInsights from '../components/AIInsights';
 import InstitutionalHoldings from '../components/InstitutionalHoldings';
 import InsiderTrading from '../components/InsiderTrading';
 import TrendSpeedAnalyzer from '../components/TrendSpeedAnalyzer';
+import MTFVolumeProfile from '../components/MTFVolumeProfile';
 import PolymarketSentiment from '../components/PolymarketSentiment';
 import NewsSentiment from '../components/NewsSentiment';
 import type { StockDetail as StockDetailType } from '../types';
@@ -491,6 +492,17 @@ export default function StockDetailPage() {
       ══════════════════════════════════ */}
       <Panel title="Trend Speed Analyzer — Zyerman" icon={Activity} color="#8b5cf6">
         <TrendSpeedAnalyzer data={data.price_history} symbol={data.symbol} />
+      </Panel>
+
+      {/* ══════════════════════════════════
+          ROW — MTF VOLUME PROFILE (Trading IQ)
+      ══════════════════════════════════ */}
+      <Panel title="Multi Timeframe Volume Profile — Trading IQ" icon={BarChart2} color="#06b6d4">
+        <MTFVolumeProfile
+          data={data.price_history}
+          currentPrice={data.current_price}
+          symbol={data.symbol}
+        />
       </Panel>
 
       {/* ══════════════════════════════════
