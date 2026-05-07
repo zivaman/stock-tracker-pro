@@ -12,6 +12,7 @@ import StockChat from '../components/StockChat';
 import AIInsights from '../components/AIInsights';
 import InstitutionalHoldings from '../components/InstitutionalHoldings';
 import InsiderTrading from '../components/InsiderTrading';
+import TrendSpeedAnalyzer from '../components/TrendSpeedAnalyzer';
 import PolymarketSentiment from '../components/PolymarketSentiment';
 import NewsSentiment from '../components/NewsSentiment';
 import type { StockDetail as StockDetailType } from '../types';
@@ -484,6 +485,13 @@ export default function StockDetailPage() {
           )}
         </div>
       </div>
+
+      {/* ══════════════════════════════════
+          ROW — TREND SPEED ANALYZER (Zyerman)
+      ══════════════════════════════════ */}
+      <Panel title="Trend Speed Analyzer — Zyerman" icon={Activity} color="#8b5cf6">
+        <TrendSpeedAnalyzer data={data.price_history} symbol={data.symbol} />
+      </Panel>
 
       {/* ══════════════════════════════════
           ROW 3 — TECHNICAL ANALYSIS (full)
