@@ -185,79 +185,124 @@ def search_symbols(q: str = Query(..., min_length=1)):
 
 
 @router.get("/{symbol}/insider-recent")
-def get_insider_recent(symbol: str, days: int = Query(default=30)):
+def get_insider_recent(symbol: str, days: int = Query(default=90)):
     """
-    Returns recent insider transactions (Form 4 equivalents) for the last N days.
-    Uses yfinance insider_transactions — refreshed from SEC EDGAR filings.
+    Returns recent insider transactions (Form 4) for the last N days.
+    Handles multiple yfinance column-name variants gracefully.
     """
     symbol = symbol.upper().strip()
     try:
         ticker = yf.Ticker(symbol)
         df = ticker.insider_transactions
         if df is None or df.empty:
-            return {"symbol": symbol, "transactions": [], "summary": {}}
+            return {"symbol": symbol, "transactions": [], "summary": {
+                "total_txs": 0, "sales_count": 0, "purchase_count": 0,
+                "total_sold_usd": 0, "total_bought_usd": 0, "net_sentiment": "neutral"
+            }}
 
-        # Filter to last N days
-        cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
-        df = df[df["Start Date"] >= cutoff].copy()
+        cols = list(df.columns)
 
-        # Classify transaction type from "Text" description
-        def classify_tx(text: str, position: str = "") -> str:
-            t = text.lower()
-            if "sale" in t:      return "sale"
-            if "purchase" in t:  return "purchase"
-            if "gift" in t:      return "gift"
-            if "exercise" in t:  return "option_exercise"
-            if "award" in t or "grant" in t: return "award"
+        # ── Normalize column names across yfinance versions ──
+        def col(candidates: list) -> str | None:
+            for c in candidates:
+                if c in cols: return c
+            return None
+
+        date_col     = col(["Start Date", "Date", "startDate", "date"])
+        insider_col  = col(["Insider", "insider", "Insider Trading"])
+        position_col = col(["Position", "position", "Relationship"])
+        shares_col   = col(["Shares", "shares", "#Shares", "Shares Traded"])
+        value_col    = col(["Value", "value", "Value ($)", "Transaction Value"])
+        text_col     = col(["Text", "text", "Transaction", "Transaction Description"])
+        url_col      = col(["URL", "url", "SEC Form 4", "Sec Form 4"])
+        ownership_col= col(["Ownership", "ownership", "Owner Type"])
+
+        # ── Filter by date ──
+        if date_col:
+            try:
+                df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+                cutoff = pd.Timestamp.now(tz=df[date_col].dt.tz) if df[date_col].dt.tz else pd.Timestamp.now()
+                cutoff = cutoff - pd.Timedelta(days=days)
+                df = df[df[date_col] >= cutoff].copy()
+            except Exception:
+                pass  # if date parsing fails, return all rows
+
+        def classify_tx(text: str) -> str:
+            t = str(text).lower()
+            if "sale" in t or "sell" in t:        return "sale"
+            if "purchase" in t or "buy" in t:     return "purchase"
+            if "exercise" in t or "option" in t:  return "option_exercise"
+            if "award" in t or "grant" in t:      return "award"
+            if "gift" in t or "donation" in t:    return "gift"
             return "other"
 
-        def tx_label(kind: str) -> str:
-            return {
-                "sale":            "מכירה 🔴",
-                "purchase":        "קנייה 🟢",
-                "gift":            "מתנה 🎁",
-                "option_exercise": "מימוש אופציה 📋",
-                "award":           "הקצאה 📋",
-            }.get(kind, "פעולה אחרת")
+        def safe_int(v) -> int:
+            try: return int(float(str(v).replace(",", "").replace("$", "")))
+            except: return 0
+
+        def safe_str(v) -> str:
+            s = str(v)
+            return "" if s in ("nan", "None", "NaN") else s
+
+        def safe_date(v) -> str:
+            try:
+                return pd.Timestamp(v).strftime("%Y-%m-%d")
+            except:
+                return str(v)[:10]
 
         txs = []
         for _, row in df.iterrows():
-            kind = classify_tx(str(row.get("Text", "")))
-            shares = int(row.get("Shares", 0))
-            value  = int(row.get("Value",  0))
-            # Derive price from value/shares
-            price  = round(value / shares, 2) if shares else 0
+            text     = safe_str(row.get(text_col, "")) if text_col else ""
+            insider  = safe_str(row.get(insider_col, "")) if insider_col else ""
+            position = safe_str(row.get(position_col, "")) if position_col else ""
+            shares   = safe_int(row.get(shares_col, 0)) if shares_col else 0
+            value    = safe_int(row.get(value_col,  0)) if value_col else 0
+            date_raw = row.get(date_col, "") if date_col else ""
+            url      = safe_str(row.get(url_col, "")) if url_col else ""
+            ownership= safe_str(row.get(ownership_col, "")) if ownership_col else ""
+
+            kind  = classify_tx(text)
+            price = round(value / shares, 2) if shares > 0 and value > 0 else 0
+
             txs.append({
-                "insider":   str(row.get("Insider", "")),
-                "position":  str(row.get("Position", "")),
+                "insider":   insider,
+                "position":  position,
                 "kind":      kind,
-                "label":     tx_label(kind),
+                "label":     {"sale":"מכירה","purchase":"קנייה","option_exercise":"מימוש אופציה","award":"הקצאה","gift":"מתנה"}.get(kind,"אחר"),
                 "shares":    shares,
                 "value":     value,
                 "price":     price,
-                "text":      str(row.get("Text", ""))[:80],
-                "date":      str(row.get("Start Date", ""))[:10],
-                "ownership": str(row.get("Ownership", "")),
-                "url":       str(row.get("URL", "")),
+                "text":      text[:100],
+                "date":      safe_date(date_raw),
+                "ownership": ownership,
+                "url":       url,
             })
 
-        # Summary
+        # Sort newest first
+        txs.sort(key=lambda t: t["date"], reverse=True)
+
         sales     = [t for t in txs if t["kind"] == "sale"]
         purchases = [t for t in txs if t["kind"] == "purchase"]
-        total_sold  = sum(t["value"] for t in sales)
+        total_sold   = sum(t["value"] for t in sales)
         total_bought = sum(t["value"] for t in purchases)
 
+        # Cluster unique insiders
+        unique_buyers  = len({t["insider"] for t in purchases})
+        unique_sellers = len({t["insider"] for t in sales})
+
         return {
-            "symbol":       symbol,
-            "period_days":  days,
-            "transactions": txs,
+            "symbol":        symbol,
+            "period_days":   days,
+            "transactions":  txs,
             "summary": {
-                "total_txs":      len(txs),
-                "sales_count":    len(sales),
-                "purchase_count": len(purchases),
+                "total_txs":        len(txs),
+                "sales_count":      len(sales),
+                "purchase_count":   len(purchases),
                 "total_sold_usd":   total_sold,
                 "total_bought_usd": total_bought,
-                "net_sentiment":    "bullish" if total_bought > total_sold else "bearish" if total_sold > 0 else "neutral",
+                "unique_buyers":    unique_buyers,
+                "unique_sellers":   unique_sellers,
+                "net_sentiment":    "bullish" if total_bought > total_sold else "bearish" if total_sold > total_bought else "neutral",
             }
         }
     except Exception as e:

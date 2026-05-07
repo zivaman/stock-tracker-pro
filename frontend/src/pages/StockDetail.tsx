@@ -11,6 +11,7 @@ import TechnicalAnalysis from '../components/TechnicalAnalysis';
 import StockChat from '../components/StockChat';
 import AIInsights from '../components/AIInsights';
 import InstitutionalHoldings from '../components/InstitutionalHoldings';
+import InsiderTrading from '../components/InsiderTrading';
 import PolymarketSentiment from '../components/PolymarketSentiment';
 import NewsSentiment from '../components/NewsSentiment';
 import type { StockDetail as StockDetailType } from '../types';
@@ -682,6 +683,13 @@ export default function StockDetailPage() {
           </div>
         </Panel>
       )}
+
+      {/* ══════════════════════════════════
+          ROW — INSIDER TRADING (Form 4)
+      ══════════════════════════════════ */}
+      <Panel title="מסחר בעלי עניין — Form 4" icon={Users} color="#f59e0b">
+        <InsiderTrading symbol={data.symbol} />
+      </Panel>
 
       {/* ══════════════════════════════════
           ROW — INSTITUTIONAL HOLDINGS (13F)
