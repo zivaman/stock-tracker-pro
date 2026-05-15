@@ -264,6 +264,7 @@ export default function CandlestickChart({
   const cumDeltaRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const patternLinesRef = useRef<any[]>([]);
   const mtfPocLinesRef  = useRef<any[]>([]);
+  const volProfileCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [chartType,      setChartType]      = useState<ChartType>('candle');
   const [granularity,    setGranularity]    = useState<Granularity>('daily');
@@ -288,6 +289,7 @@ export default function CandlestickChart({
   const [showOrderFlow,      setShowOrderFlow]      = useState(false);
   const [showAMD,            setShowAMD]            = useState(false);
   const [showVolProfile,     setShowVolProfile]     = useState(false);
+  const [volProfileTF,       setVolProfileTF]       = useState<'day' | 'week' | 'month'>('week');
   const [showMTFPoc,         setShowMTFPoc]         = useState(false);
   const [isFullscreen,       setIsFullscreen]       = useState(false);
   const [drawMode,       setDrawMode]       = useState(false);
@@ -918,6 +920,182 @@ export default function CandlestickChart({
     });
   }, [showMTFPoc, data, range]);
 
+  /* ─── Vol Profile Canvas draw ─── */
+  const drawVolProfileCanvas = useCallback(() => {
+    const canvas = volProfileCanvasRef.current;
+    const series = candleRef.current;
+    const container = containerRef.current;
+    if (!canvas || !series || !container) return;
+
+    const rect = container.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const cw = Math.floor(rect.width * 0.22);
+    const ch = rect.height;
+    canvas.width  = cw * dpr;
+    canvas.height = ch * dpr;
+    canvas.style.width  = `${cw}px`;
+    canvas.style.height = `${ch}px`;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, cw, ch);
+
+    // Select data slice
+    let slice: PricePoint[] = [];
+    if (volProfileTF === 'day') {
+      const raw = intradayData['15m'] ?? [];
+      if (raw.length) {
+        const lastDate = raw[raw.length - 1].date.slice(0, 10);
+        slice = raw.filter(d => d.date.slice(0, 10) === lastDate && d.volume > 0);
+      } else {
+        slice = data.slice(-1);
+      }
+    } else if (volProfileTF === 'week') {
+      slice = data.slice(-5).filter(d => d.volume > 0);
+    } else {
+      slice = data.slice(-21).filter(d => d.volume > 0);
+    }
+    if (slice.length < 2) return;
+
+    const NUM_BUCKETS = 36;
+    const priceMin = Math.min(...slice.map(d => d.low ?? d.close));
+    const priceMax = Math.max(...slice.map(d => d.high ?? d.close));
+    if (priceMax <= priceMin) return;
+    const bSize = (priceMax - priceMin) / NUM_BUCKETS;
+
+    const buckets = new Array(NUM_BUCKETS).fill(0);
+    slice.forEach(d => {
+      const lo = d.low ?? d.close, hi = d.high ?? d.close;
+      const range = hi - lo || 0.001;
+      for (let i = 0; i < NUM_BUCKETS; i++) {
+        const bLow  = priceMin + i * bSize;
+        const bHigh = bLow + bSize;
+        const overlap = Math.min(hi, bHigh) - Math.max(lo, bLow);
+        if (overlap > 0) buckets[i] += (d.volume || 0) * (overlap / range);
+      }
+    });
+
+    const pocIdx  = buckets.reduce((mi, v, i, arr) => v > arr[mi] ? i : mi, 0);
+    const maxVol  = buckets[pocIdx];
+    if (maxVol === 0) return;
+    const totalVol = buckets.reduce((s, v) => s + v, 0);
+
+    let cumVol = buckets[pocIdx], lo = pocIdx, hi = pocIdx;
+    while (cumVol < totalVol * 0.70 && (lo > 0 || hi < NUM_BUCKETS - 1)) {
+      const addLo = lo > 0 ? buckets[lo - 1] : 0;
+      const addHi = hi < NUM_BUCKETS - 1 ? buckets[hi + 1] : 0;
+      if (addHi >= addLo && hi < NUM_BUCKETS - 1) { hi++; cumVol += buckets[hi]; }
+      else if (lo > 0) { lo--; cumVol += buckets[lo]; }
+      else break;
+    }
+    const vah = priceMin + (hi + 1) * bSize;
+    const val = priceMin + lo * bSize;
+    const poc = priceMin + (pocIdx + 0.5) * bSize;
+
+    const maxBarW = cw * 0.86;
+    const s = series as any;
+
+    // Vertical separator line
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, ch); ctx.stroke();
+
+    // Bars
+    for (let i = 0; i < NUM_BUCKETS; i++) {
+      if (buckets[i] === 0) continue;
+      const pMid = priceMin + (i + 0.5) * bSize;
+      const yMid = s.priceToCoordinate(pMid);
+      if (yMid == null || yMid < 0 || yMid > ch) continue;
+      const yTop = s.priceToCoordinate(priceMin + (i + 1) * bSize) ?? yMid - 3;
+      const yBot = s.priceToCoordinate(priceMin + i * bSize) ?? yMid + 3;
+      const barH = Math.max(2, Math.abs(yBot - yTop) - 1);
+      const barW = (buckets[i] / maxVol) * maxBarW;
+      const isPOC = i === pocIdx;
+      const isVA  = i >= lo && i <= hi;
+
+      if (isPOC) ctx.fillStyle = 'rgba(234,179,8,0.92)';
+      else if (isVA) ctx.fillStyle = 'rgba(59,130,246,0.58)';
+      else ctx.fillStyle = 'rgba(107,114,128,0.28)';
+
+      ctx.fillRect(cw - barW, Math.min(yTop, yBot), barW, barH);
+    }
+
+    // POC label
+    const yPOC = s.priceToCoordinate(poc);
+    if (yPOC != null && yPOC >= 0 && yPOC <= ch) {
+      ctx.strokeStyle = 'rgba(234,179,8,0.9)';
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(0, yPOC); ctx.lineTo(cw, yPOC); ctx.stroke();
+      ctx.fillStyle = 'rgba(234,179,8,1)';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`POC $${poc.toFixed(2)}`, 3, yPOC - 2);
+    }
+
+    // VAH / VAL lines
+    const yVAH = s.priceToCoordinate(vah);
+    const yVAL = s.priceToCoordinate(val);
+    ctx.strokeStyle = 'rgba(59,130,246,0.8)';
+    ctx.setLineDash([3, 2]);
+    ctx.lineWidth = 1;
+    if (yVAH != null && yVAH >= 0 && yVAH <= ch) {
+      ctx.beginPath(); ctx.moveTo(0, yVAH); ctx.lineTo(cw, yVAH); ctx.stroke();
+      ctx.fillStyle = 'rgba(99,179,237,1)';
+      ctx.font = '8px monospace'; ctx.textAlign = 'left';
+      ctx.fillText(`VAH $${vah.toFixed(2)}`, 3, yVAH - 2);
+    }
+    if (yVAL != null && yVAL >= 0 && yVAL <= ch) {
+      ctx.beginPath(); ctx.moveTo(0, yVAL); ctx.lineTo(cw, yVAL); ctx.stroke();
+      ctx.fillStyle = 'rgba(99,179,237,1)';
+      ctx.font = '8px monospace'; ctx.textAlign = 'left';
+      ctx.fillText(`VAL $${val.toFixed(2)}`, 3, yVAL + 9);
+    }
+    ctx.setLineDash([]);
+
+    // Label strip at top
+    const tfLabel = volProfileTF === 'day' ? '📅 יום' : volProfileTF === 'week' ? '📅 שבוע' : '📅 חודש';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, cw, 20);
+    ctx.fillStyle = '#eab308';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(tfLabel, cw / 2, 13);
+  }, [volProfileTF, data, intradayData]);
+
+  /* ─── Vol Profile canvas — subscribe to chart events ─── */
+  useEffect(() => {
+    if (!showVolProfile) {
+      const canvas = volProfileCanvasRef.current;
+      if (canvas) { const ctx = canvas.getContext('2d'); ctx?.clearRect(0, 0, canvas.width, canvas.height); }
+      return;
+    }
+    const chart = chartRef.current;
+    if (!chart) return;
+    const redraw = () => { setTimeout(drawVolProfileCanvas, 30); };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(redraw);
+    chart.subscribeCrosshairMove(redraw);
+    drawVolProfileCanvas();
+    return () => {
+      try { chart.timeScale().unsubscribeVisibleLogicalRangeChange(redraw); } catch {}
+      try { chart.unsubscribeCrosshairMove(redraw); } catch {}
+    };
+  }, [showVolProfile, volProfileTF, drawVolProfileCanvas, intradayData, data]);
+
+  /* ─── Vol Profile — auto-fetch intraday when day TF selected ─── */
+  useEffect(() => {
+    if (!showVolProfile || volProfileTF !== 'day' || !symbol) return;
+    if (intradayData['15m']?.length) return; // already loaded
+    setLoadingIntraday(true);
+    getIntradayData(symbol, '15m')
+      .then(d => { setIntradayData(prev => ({ ...prev, '15m': d.data || [] })); })
+      .catch(() => {})
+      .finally(() => setLoadingIntraday(false));
+  }, [showVolProfile, volProfileTF, symbol]);
+
   /* ─── User-drawn line helpers ─── */
   const removeLine = (id: string) => {
     const ref = drawnLineRefs.current.get(id);
@@ -1234,10 +1412,21 @@ export default function CandlestickChart({
           {intradayError}
         </div>
       )}
-      <div
-        ref={containerRef}
-        style={{ width: '100%', height: chartHeight, cursor: (drawMode || anchorMode) ? 'crosshair' : 'default' }}
-      />
+      <div style={{ position: 'relative', width: '100%' }}>
+        <div
+          ref={containerRef}
+          style={{ width: '100%', height: chartHeight, cursor: (drawMode || anchorMode) ? 'crosshair' : 'default' }}
+        />
+        {showVolProfile && (
+          <canvas
+            ref={volProfileCanvasRef}
+            style={{
+              position: 'absolute', top: 0, right: 0,
+              pointerEvents: 'none', zIndex: 10,
+            }}
+          />
+        )}
+      </div>
 
       {/* ── AMD legend strip ── */}
       {showAMD && granularity === 'intraday' && (
@@ -1263,56 +1452,32 @@ export default function CandlestickChart({
         </div>
       )}
 
-      {/* ── Volume Profile panel ── */}
-      {showVolProfile && (() => {
-        const slice = getActiveData();
-        const buckets = computeVolumeBuckets(slice, 24);
-        if (!buckets.length) return null;
-        const maxVol = Math.max(...buckets.map(b => b.volume));
-        return (
-          <div style={{
-            border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
-            background: 'var(--bg2)', padding: '8px',
-          }}>
-            <p style={{ fontSize: '.63rem', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
-              📊 Volume Profile — {slice.length} בארים
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 1.5, height: 200, position: 'relative' }}>
-              {buckets.map((b, i) => {
-                const barW = maxVol > 0 ? (b.volume / maxVol) * 70 : 0;
-                const color = b.isPOC ? '#eab308' : b.isVA ? '#3b82f6' : '#6b7280';
-                return (
-                  <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minHeight: 0 }}>
-                    <span style={{ fontSize: '.55rem', color: 'var(--muted)', width: 48, textAlign: 'right', flexShrink: 0, fontFamily: 'monospace' }}>
-                      ${b.priceMid.toFixed(1)}
-                    </span>
-                    <div style={{ flex: 1, position: 'relative', height: '75%', display: 'flex', alignItems: 'center' }}>
-                      <div style={{
-                        height: '100%', width: `${barW}%`,
-                        background: color, borderRadius: '0 3px 3px 0',
-                        opacity: b.isPOC ? 1 : b.isVA ? 0.8 : 0.5,
-                        minWidth: barW > 0 ? 2 : 0,
-                      }} />
-                    </div>
-                    {b.isPOC && <span style={{ fontSize: '.55rem', color: '#eab308', fontWeight: 700, flexShrink: 0 }}>POC</span>}
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
-              {[
-                { color: '#eab308', label: 'POC — נקודת שליטה (מחיר הנפח הגבוה ביותר)' },
-                { color: '#3b82f6', label: 'Value Area (70% מהנפח)' },
-              ].map(({ color, label }) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <div style={{ width: 10, height: 10, background: color, borderRadius: 2 }} />
-                  <span style={{ fontSize: '.62rem', color: 'var(--muted)' }}>{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
+      {/* ── Volume Profile TF selector ── */}
+      {showVolProfile && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0' }}>
+          <span style={{ fontSize: '.65rem', color: 'var(--muted)', fontWeight: 700 }}>Vol Profile טווח:</span>
+          {([
+            { key: 'day',   label: 'יום 📅',   desc: 'שעות מסחר היום' },
+            { key: 'week',  label: 'שבוע 📊',  desc: '5 ימי מסחר' },
+            { key: 'month', label: 'חודש 📈',  desc: '21 ימי מסחר' },
+          ] as const).map(({ key, label, desc }) => (
+            <button
+              key={key}
+              title={desc}
+              style={{
+                ...btn(volProfileTF === key, '#eab308'),
+                fontSize: '.7rem',
+              }}
+              onClick={() => setVolProfileTF(key)}
+            >
+              {label}
+            </button>
+          ))}
+          <span style={{ fontSize: '.6rem', color: 'var(--muted)', marginRight: 6 }}>
+            ⬛ POC &nbsp;|&nbsp; <span style={{ color: '#3b82f6' }}>■ VA 70%</span> &nbsp;|&nbsp; □ חוץ לVA
+          </span>
+        </div>
+      )}
 
       {/* ── Chart Patterns ── */}
       {patterns && patterns.length > 0 && (
