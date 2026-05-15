@@ -1,7 +1,6 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './ThemeContext';
 import Layout from './components/Layout';
-import Portfolio from './pages/Portfolio';
 import Radar from './pages/Radar';
 import StockDetail from './pages/StockDetail';
 import ZivIndex from './pages/ZivIndex';
@@ -23,7 +22,7 @@ export default function App() {
           <Route path="*" element={
             <Layout>
               <Routes>
-                <Route path="/" element={<Portfolio />} />
+                <Route path="/" element={<Navigate to="/radar" replace />} />
                 <Route path="/radar" element={<Radar />} />
                 <Route path="/stock/:symbol" element={<StockDetail />} />
                 <Route path="/ziv-index" element={<ZivIndex />} />

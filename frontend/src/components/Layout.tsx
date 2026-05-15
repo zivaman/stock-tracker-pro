@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Bell, Sun, Moon, ScanLine, DollarSign,
-  Briefcase, Radar, BarChart2, Search, BookOpen, Globe,
+  Radar, BarChart2, Search, BookOpen, Globe,
   PanelRight, PanelTop, Settings, Eye, EyeOff, CheckCircle, XCircle, Layers,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -380,10 +380,6 @@ function Navbar({ notifications, onScan, scanning, navSide, toggleNavSide, onOpe
 
       {/* Nav links */}
       <div className="navbar-links">
-        <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-          <Briefcase size={15} />
-          <span>התיק שלי</span>
-        </NavLink>
         <NavLink to="/radar" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <Radar size={15} />
           <span>המלצות מניות</span>

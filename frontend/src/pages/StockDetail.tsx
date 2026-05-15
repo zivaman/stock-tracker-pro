@@ -216,6 +216,183 @@ function AddPortfolioModal({ symbol, name, price, onClose, onDone }: {
   );
 }
 
+/* ─── Weekly Price + Volume Panel ─── */
+interface WeekDay {
+  date: string;
+  open: number;
+  close: number;
+  high: number;
+  low: number;
+  volume: number;
+  change_pct: number;
+  above_avg: boolean;
+}
+
+function WeeklySparkline({ days, avgVol }: { days: WeekDay[]; avgVol: number }) {
+  const W = 340, PH = 60, VH = 36, GAP = 6;
+  const prices = days.map(d => d.close);
+  const vols   = days.map(d => d.volume);
+  const minP = Math.min(...prices), maxP = Math.max(...prices);
+  const maxV = Math.max(...vols, avgVol * 1.1);
+  const rangeP = maxP - minP || 0.01;
+  const barW = W / days.length - 3;
+
+  const px = (i: number) => (i / (days.length - 1)) * W;
+  const py = (v: number) => PH - 4 - ((v - minP) / rangeP) * (PH - 8);
+
+  const pts = prices.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ');
+  const fillPts = `0,${PH} ` + prices.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ') + ` ${W},${PH}`;
+  const overallUp = prices[prices.length - 1] >= prices[0];
+  const lineColor = overallUp ? '#00c896' : '#f04060';
+
+  return (
+    <svg width={W} height={PH + GAP + VH} style={{ overflow: 'visible', display: 'block' }}>
+      <defs>
+        <linearGradient id="wk-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={lineColor} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={lineColor} stopOpacity="0.03" />
+        </linearGradient>
+      </defs>
+
+      {/* Price area */}
+      <polygon points={fillPts} fill="url(#wk-fill)" />
+      <polyline points={pts} fill="none" stroke={lineColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Price dots + labels */}
+      {prices.map((v, i) => {
+        const x = px(i), y = py(v);
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r={3} fill={lineColor} />
+            <text x={x} y={y - 7} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.6)">${v.toFixed(0)}</text>
+          </g>
+        );
+      })}
+
+      {/* Volume bars */}
+      {vols.map((v, i) => {
+        const x = (i * (W / days.length)) + 1;
+        const h = Math.max(3, (v / maxV) * VH);
+        const y = PH + GAP + VH - h;
+        return (
+          <rect key={i} x={x} y={y} width={barW} height={h} rx={2}
+            fill={days[i].above_avg ? 'rgba(245,158,11,0.8)' : 'rgba(107,114,128,0.45)'} />
+        );
+      })}
+
+      {/* Avg volume line */}
+      {avgVol > 0 && (
+        <line
+          x1={0} y1={PH + GAP + VH - (avgVol / maxV) * VH}
+          x2={W} y2={PH + GAP + VH - (avgVol / maxV) * VH}
+          stroke="rgba(255,255,255,0.3)" strokeWidth={1} strokeDasharray="4,3"
+        />
+      )}
+    </svg>
+  );
+}
+
+function WeeklyPanel({ weekData, avgVolume, currentPrice }: { weekData: WeekDay[]; avgVolume: number; currentPrice: number }) {
+  const lastDay   = weekData[weekData.length - 1];
+  const firstDay  = weekData[0];
+  const weekChg   = lastDay && firstDay ? ((lastDay.close - firstDay.open) / firstDay.open) * 100 : 0;
+  const weekUp    = weekChg >= 0;
+  const totalVol  = weekData.reduce((s, d) => s + d.volume, 0);
+  const avgDayVol = Math.round(totalVol / (weekData.length || 1));
+  const peakVol   = weekData.reduce((m, d) => d.volume > m.volume ? d : m, weekData[0]);
+  const fmtVol    = (v: number) => v >= 1e9 ? `${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : `${v}`;
+
+  return (
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ height: 3, background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)' }} />
+      <div style={{ padding: '0.7rem 1.1rem 0.5rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Activity size={13} style={{ color: '#3b82f6' }} />
+          <span style={{ fontSize: '.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--muted)' }}>נתוני שבוע אחרון — מחיר + נפח</span>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span style={{ fontSize: '.75rem', color: weekUp ? '#00c896' : '#f04060', fontWeight: 800, fontFamily: 'monospace' }}>
+            {weekUp ? '+' : ''}{weekChg.toFixed(2)}% שבועי
+          </span>
+          <span style={{ fontSize: '.7rem', color: 'var(--muted)' }}>נפח שבוע: {fmtVol(totalVol)}</span>
+        </div>
+      </div>
+      <div style={{ padding: '0.9rem 1.1rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+
+        {/* Sparkline */}
+        <div style={{ flex: '0 0 auto' }}>
+          <WeeklySparkline days={weekData} avgVol={avgVolume} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+            <span style={{ fontSize: '.58rem', color: 'var(--muted)' }}>{weekData[0]?.date?.slice(5)}</span>
+            <span style={{ fontSize: '.58rem', color: '#f59e0b' }}>━ ממוצע נפח</span>
+            <span style={{ fontSize: '.58rem', color: 'var(--muted)' }}>{weekData[weekData.length - 1]?.date?.slice(5)}</span>
+          </div>
+        </div>
+
+        {/* Day-by-day table */}
+        <div style={{ flex: 1, minWidth: 260, overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.7rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                {['תאריך', 'פתיחה', 'סגירה', 'שינוי', 'H/L', 'נפח', 'מול ממוצע'].map(h => (
+                  <th key={h} style={{ padding: '4px 8px', textAlign: 'right', color: 'var(--muted)', fontWeight: 700, fontSize: '.58rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...weekData].reverse().map(day => {
+                const up = day.close >= day.open;
+                const volRatio = avgVolume > 0 ? day.volume / avgVolume : 1;
+                return (
+                  <tr key={day.date} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ padding: '5px 8px', color: 'var(--muted)', fontFamily: 'monospace', fontSize: '.65rem' }}>{day.date.slice(5)}</td>
+                    <td style={{ padding: '5px 8px', fontFamily: 'monospace', color: 'var(--text2)' }}>${day.open.toFixed(2)}</td>
+                    <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontWeight: 700, color: up ? '#00c896' : '#f04060' }}>${day.close.toFixed(2)}</td>
+                    <td style={{ padding: '5px 8px' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '.7rem', color: day.change_pct >= 0 ? '#00c896' : '#f04060' }}>
+                        {day.change_pct >= 0 ? '+' : ''}{day.change_pct.toFixed(2)}%
+                      </span>
+                    </td>
+                    <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontSize: '.62rem', color: 'var(--muted)' }}>
+                      ${day.high.toFixed(2)} / ${day.low.toFixed(2)}
+                    </td>
+                    <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontSize: '.65rem', color: day.above_avg ? '#f59e0b' : 'var(--text2)' }}>
+                      {fmtVol(day.volume)}
+                    </td>
+                    <td style={{ padding: '5px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 48, height: 5, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${Math.min(100, volRatio * 50)}%`, background: day.above_avg ? '#f59e0b' : '#6b7280', borderRadius: 3 }} />
+                        </div>
+                        <span style={{ fontSize: '.6rem', color: day.above_avg ? '#f59e0b' : 'var(--muted)', fontFamily: 'monospace' }}>{volRatio.toFixed(1)}×</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {/* Summary row */}
+          <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
+            {[
+              { label: 'שינוי שבועי', val: `${weekChg >= 0 ? '+' : ''}${weekChg.toFixed(2)}%`, color: weekUp ? '#00c896' : '#f04060' },
+              { label: 'פיק נפח', val: `${peakVol?.date?.slice(5)} (${fmtVol(peakVol?.volume ?? 0)})`, color: '#f59e0b' },
+              { label: 'ממוצע נפח יומי', val: fmtVol(avgDayVol), color: 'var(--text2)' },
+              { label: 'מחיר נוכחי', val: `$${currentPrice.toFixed(2)}`, color: 'var(--text)' },
+            ].map(({ label, val, color }) => (
+              <div key={label}>
+                <div style={{ fontSize: '.58rem', color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: '.78rem', fontWeight: 800, color, fontFamily: 'monospace' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════ MAIN PAGE ═══════════════════════════════════════ */
 export default function StockDetailPage() {
   const { symbol } = useParams<{ symbol: string }>();
@@ -358,14 +535,10 @@ export default function StockDetailPage() {
               </div>
               {/* Action buttons */}
               <div style={{ display: 'flex', gap: 7, marginTop: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                <button onClick={() => setShowAddPortfolio(true)} className="btn-primary" style={{ fontSize: '.78rem', gap: 5 }}>
-                  <PlusCircle size={13} /> הוסף לתיק
-                </button>
                 <button onClick={handleAddZiv} disabled={addingZiv} className="btn-secondary" style={{ fontSize: '.78rem', gap: 5, color: 'var(--purple)', borderColor: 'var(--purple)' }}>
                   <BarChart2 size={13} />
                   {zivMsg || (addingZiv ? 'מוסיף...' : 'הוסף למדד זיו')}
                 </button>
-                {portfolioMsg && <span style={{ fontSize: '.75rem', color: 'var(--green)', alignSelf: 'center' }}>{portfolioMsg}</span>}
               </div>
             </div>
           </div>
@@ -381,6 +554,17 @@ export default function StockDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ══════════════════════════════════
+          ROW 1B — WEEKLY PRICE + VOLUME
+      ══════════════════════════════════ */}
+      {(data as any).week_data?.length > 0 && (
+        <WeeklyPanel
+          weekData={(data as any).week_data}
+          avgVolume={(data as any).avg_volume_20d ?? 0}
+          currentPrice={data.current_price}
+        />
+      )}
 
       {/* ══════════════════════════════════
           ROW 2 — CHART (2/3) + SIGNAL (1/3)
@@ -508,13 +692,7 @@ export default function StockDetailPage() {
       {/* ══════════════════════════════════
           ROW 3 — TECHNICAL ANALYSIS (full)
       ══════════════════════════════════ */}
-      <Panel title="ניתוח טכני מפורט" icon={Activity} color="var(--purple)"
-        action={
-          <button onClick={() => setShowAddPortfolio(true)} className="btn-secondary" style={{ fontSize: '.68rem', gap: 4, padding: '3px 10px' }}>
-            <PlusCircle size={11} /> הוסף לתיק
-          </button>
-        }
-      >
+      <Panel title="ניתוח טכני מפורט" icon={Activity} color="var(--purple)">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
           <div>
             <p style={{ fontSize: '.62rem', textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', marginBottom: 8 }}>אינדיקטורים</p>

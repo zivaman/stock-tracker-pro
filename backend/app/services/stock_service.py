@@ -307,6 +307,25 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
                 "macd_hist":   round(float(row.get("MACD_Hist", 0)), 4) if not np.isnan(float(row.get("MACD_Hist", float("nan")))) else None,
             })
 
+        # Last 7 trading days (for weekly panel in UI)
+        week_df = df.tail(7)
+        avg_vol_20d = float(df["Volume"].tail(20).mean())
+        week_data = []
+        for ts, row in week_df.iterrows():
+            wclose = float(row["Close"])
+            wprev_idx = df.index.get_loc(ts) - 1
+            wprev = float(df["Close"].iloc[wprev_idx]) if wprev_idx >= 0 else wclose
+            week_data.append({
+                "date":       ts.strftime("%Y-%m-%d"),
+                "open":       round(float(row["Open"]), 2),
+                "close":      round(wclose, 2),
+                "high":       round(float(row["High"]), 2),
+                "low":        round(float(row["Low"]), 2),
+                "volume":     int(row["Volume"]),
+                "change_pct": round((wclose - wprev) / wprev * 100, 2) if wprev else 0,
+                "above_avg":  int(row["Volume"]) > avg_vol_20d,
+            })
+
         def pct_change(days):
             if len(df) < days + 1:
                 return None
@@ -339,6 +358,8 @@ def get_stock_analysis(symbol: str) -> Dict[str, Any]:
                 "6m": pct_change(126),
                 "1y": pct_change(252),
             },
+            "week_data":       week_data,
+            "avg_volume_20d":  round(avg_vol_20d),
         }
     except Exception as e:
         return {"error": str(e), "symbol": symbol}

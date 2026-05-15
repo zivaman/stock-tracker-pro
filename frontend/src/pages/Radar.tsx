@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Radar as RadarIcon, Clock, AlertCircle, WifiOff } from 'lucide-react';
+import { RefreshCw, Radar as RadarIcon, Clock, AlertCircle, WifiOff, Layers } from 'lucide-react';
 import { getRadar, refreshRadar } from '../api/client';
 import RadarCard from '../components/RadarCard';
+import SectorDashboard from './SectorDashboard';
 import type { RadarStock } from '../types';
 
 const CACHE_KEY = 'cache_radar';
@@ -20,6 +21,7 @@ function saveCache(data: RadarData) {
 }
 
 export default function Radar() {
+  const [tab, setTab] = useState<'radar' | 'sectors'>('radar');
   const [data, setData] = useState<RadarData | null>(() => loadCache());
   const [loading, setLoading] = useState(!loadCache());
   const [refreshing, setRefreshing] = useState(false);
@@ -62,6 +64,35 @@ export default function Radar() {
 
   return (
     <div className="space-y-6">
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[
+          { key: 'radar',   label: 'המלצות מניות', icon: RadarIcon },
+          { key: 'sectors', label: 'חלוקת סקטורים', icon: Layers },
+        ].map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key as any)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '7px 18px', borderRadius: 10, fontWeight: 700, fontSize: '.82rem',
+              cursor: 'pointer', transition: 'all .15s', border: '1px solid',
+              background: tab === key ? 'var(--green)' : 'var(--card)',
+              color: tab === key ? '#fff' : 'var(--text2)',
+              borderColor: tab === key ? 'var(--green)' : 'var(--border)',
+            }}
+          >
+            <Icon size={14} />{label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sector view */}
+      {tab === 'sectors' && <SectorDashboard />}
+
+      {/* Radar view */}
+      {tab === 'radar' && <>
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
@@ -174,6 +205,7 @@ export default function Radar() {
           ))}
         </div>
       </div>
+      </>}
     </div>
   );
 }
