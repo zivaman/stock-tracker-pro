@@ -263,6 +263,7 @@ export default function CandlestickChart({
   const fibExtLinesRef = useRef<any[]>([]);
   const cumDeltaRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const patternLinesRef = useRef<any[]>([]);
+  const mtfPocLinesRef  = useRef<any[]>([]);
 
   const [chartType,      setChartType]      = useState<ChartType>('candle');
   const [granularity,    setGranularity]    = useState<Granularity>('daily');
@@ -287,6 +288,7 @@ export default function CandlestickChart({
   const [showOrderFlow,      setShowOrderFlow]      = useState(false);
   const [showAMD,            setShowAMD]            = useState(false);
   const [showVolProfile,     setShowVolProfile]     = useState(false);
+  const [showMTFPoc,         setShowMTFPoc]         = useState(false);
   const [isFullscreen,       setIsFullscreen]       = useState(false);
   const [drawMode,       setDrawMode]       = useState(false);
   const [drawType,       setDrawType]       = useState<'support' | 'resistance'>('support');
@@ -844,6 +846,78 @@ export default function CandlestickChart({
     });
   }, [patterns]);
 
+  /* ─── MTF Volume Profile — POC / VAH / VAL on chart ─── */
+  useEffect(() => {
+    if (!candleRef.current) return;
+    const series = candleRef.current as any;
+    // clear old lines
+    mtfPocLinesRef.current.forEach(l => { try { series.removePriceLine(l); } catch {} });
+    mtfPocLinesRef.current = [];
+    if (!showMTFPoc || !data?.length) return;
+
+    const TF_CONFIG = [
+      { days: 5,   label: '5D', color: '#f59e0b' },
+      { days: 21,  label: '1M', color: '#22c55e' },
+      { days: 63,  label: '3M', color: '#3b82f6' },
+      { days: 126, label: '6M', color: '#a855f7' },
+    ];
+    const NUM_BUCKETS = 30;
+
+    TF_CONFIG.forEach(({ days, label, color }) => {
+      const slice = data.slice(-days).filter(d => d.high != null && d.low != null && d.volume > 0);
+      if (slice.length < 3) return;
+
+      const priceMin = Math.min(...slice.map(d => d.low));
+      const priceMax = Math.max(...slice.map(d => d.high));
+      const bSize = (priceMax - priceMin) / NUM_BUCKETS;
+      if (bSize <= 0) return;
+
+      const buckets = new Array(NUM_BUCKETS).fill(0);
+      slice.forEach(d => {
+        const range = d.high - d.low || 0.001;
+        for (let i = 0; i < NUM_BUCKETS; i++) {
+          const bLow  = priceMin + i * bSize;
+          const bHigh = bLow + bSize;
+          const overlap = Math.min(d.high, bHigh) - Math.max(d.low, bLow);
+          if (overlap > 0) buckets[i] += d.volume * (overlap / range);
+        }
+      });
+
+      const pocIdx   = buckets.reduce((mi, v, i, arr) => v > arr[mi] ? i : mi, 0);
+      const poc      = priceMin + (pocIdx + 0.5) * bSize;
+      const totalVol = buckets.reduce((s, v) => s + v, 0);
+      let cumVol = buckets[pocIdx], lo = pocIdx, hi = pocIdx;
+      while (cumVol < totalVol * 0.70 && (lo > 0 || hi < NUM_BUCKETS - 1)) {
+        const addLo = lo > 0 ? buckets[lo - 1] : 0;
+        const addHi = hi < NUM_BUCKETS - 1 ? buckets[hi + 1] : 0;
+        if (addHi >= addLo && hi < NUM_BUCKETS - 1) { hi++; cumVol += buckets[hi]; }
+        else if (lo > 0) { lo--; cumVol += buckets[lo]; }
+        else break;
+      }
+      const vah = priceMin + (hi + 1) * bSize;
+      const val = priceMin + lo * bSize;
+
+      // POC — solid, thick, colored
+      mtfPocLinesRef.current.push(series.createPriceLine({
+        price: Math.round(poc * 100) / 100,
+        color, lineWidth: 2, lineStyle: LineStyle.Solid,
+        axisLabelVisible: true, title: `⬛ POC ${label}`,
+      }));
+      // VAH — dashed
+      mtfPocLinesRef.current.push(series.createPriceLine({
+        price: Math.round(vah * 100) / 100,
+        color, lineWidth: 1, lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true, title: `↑ VAH ${label}`,
+      }));
+      // VAL — dashed
+      mtfPocLinesRef.current.push(series.createPriceLine({
+        price: Math.round(val * 100) / 100,
+        color, lineWidth: 1, lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true, title: `↓ VAL ${label}`,
+      }));
+    });
+  }, [showMTFPoc, data, range]);
+
   /* ─── User-drawn line helpers ─── */
   const removeLine = (id: string) => {
     const ref = drawnLineRefs.current.get(id);
@@ -1037,7 +1111,26 @@ export default function CandlestickChart({
                   <button style={btn(showSessionProfile,  '#eab308')} onClick={() => setShowSessionProfile(s => !s)}>Session POC</button>
                   <button style={btn(showOrderFlow, '#06b6d4')} onClick={() => setShowOrderFlow(s => !s)}>Order Flow</button>
                   <button style={btn(showVolProfile, '#eab308')} onClick={() => setShowVolProfile(s => !s)}>Vol Profile</button>
+                  <button style={btn(showMTFPoc, '#a855f7')} onClick={() => setShowMTFPoc(s => !s)} title="POC / VAH / VAL של 4 טווחי זמן (5D / 1M / 3M / 6M)">MTF POC</button>
                 </div>
+                {showMTFPoc && (
+                  <div style={{ marginBottom: 10, padding: '6px 10px', background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.25)', borderRadius: 8 }}>
+                    <p style={{ fontSize: '.62rem', color: '#a855f7', fontWeight: 700, marginBottom: 4 }}>MTF Volume Profile — קווי POC / VAH / VAL</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+                      {[
+                        { c: '#f59e0b', label: '5D' },
+                        { c: '#22c55e', label: '1M' },
+                        { c: '#3b82f6', label: '3M' },
+                        { c: '#a855f7', label: '6M' },
+                      ].map(({ c, label }) => (
+                        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 18, height: 2, background: c, borderRadius: 1 }} />
+                          <span style={{ fontSize: '.6rem', color: c, fontWeight: 700 }}>POC {label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Group: Advanced */}
                 <p style={{ fontSize: '.62rem', color: 'var(--muted)', fontWeight: 700, margin: '0 0 6px 0', textTransform: 'uppercase', letterSpacing: '.05em' }}>

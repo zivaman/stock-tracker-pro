@@ -577,18 +577,21 @@ export default function StockDetailPage() {
           icon={BarChart2}
           color="var(--blue)"
           action={
-            <button
-              onClick={() => window.open(`/chart/${data.symbol}`, '_blank')}
+            <a
+              href={`/chart/${data.symbol}`}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
                 background: 'transparent', border: '1px solid var(--border)',
                 borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
                 color: 'var(--muted)', fontSize: '.68rem', fontWeight: 600,
+                textDecoration: 'none',
               }}
               title="פתח גרף בעמוד נפרד"
             >
               <ExternalLink size={11} /> פתח בעמוד נפרד
-            </button>
+            </a>
           }
         >
           <CandlestickChart
