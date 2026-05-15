@@ -203,7 +203,7 @@ def get_insider_recent(symbol: str, days: int = Query(default=90)):
         cols = list(df.columns)
 
         # ── Normalize column names across yfinance versions ──
-        def col(candidates: list) -> str | None:
+        def col(candidates: list) -> Optional[str]:
             for c in candidates:
                 if c in cols: return c
             return None

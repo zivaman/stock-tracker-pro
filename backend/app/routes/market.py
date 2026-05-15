@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from typing import Optional
 import yfinance as yf
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -51,7 +52,7 @@ SECTOR_STOCKS = {
 }
 
 
-def _fetch_stock_snapshot(symbol: str) -> dict | None:
+def _fetch_stock_snapshot(symbol: str) -> Optional[dict]:
     """Fetch key metrics for a single stock."""
     try:
         tk = yf.Ticker(symbol)
