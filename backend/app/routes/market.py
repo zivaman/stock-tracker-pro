@@ -76,6 +76,21 @@ def _fetch_stock_snapshot(symbol: str) -> dict | None:
         mkt_cap = getattr(info, "market_cap", None)
         name    = getattr(info, "company_long_name", symbol) or symbol
 
+        # ── Last 5 trading days (week) price + volume ──
+        week = hist.tail(5)
+        week_prices  = [round(float(v), 2) for v in week["Close"].tolist()]
+        week_volumes = [int(v)             for v in week["Volume"].tolist()]
+
+        # ── Trend signal: price direction × volume conviction ──
+        price_up = week_prices[-1] > week_prices[0] if len(week_prices) >= 2 else True
+        prev_vol_avg = float(hist["Volume"].iloc[-10:-5].mean()) if len(hist) >= 10 else avg_vol
+        vol_up = float(hist["Volume"].tail(5).mean()) > prev_vol_avg if prev_vol_avg > 0 else True
+
+        if   price_up and vol_up:      trend_signal = "bullish"
+        elif price_up and not vol_up:  trend_signal = "weak_up"
+        elif not price_up and vol_up:  trend_signal = "bearish"
+        else:                          trend_signal = "weak_down"
+
         return {
             "symbol":        symbol,
             "name":          name[:30],
@@ -91,6 +106,9 @@ def _fetch_stock_snapshot(symbol: str) -> dict | None:
             "avg_volume":    int(avg_vol),
             "vol_ratio":     round(vol / avg_vol, 2) if avg_vol > 0 else 1,
             "market_cap":    int(mkt_cap) if mkt_cap else None,
+            "week_prices":   week_prices,
+            "week_volumes":  week_volumes,
+            "trend_signal":  trend_signal,
         }
     except Exception as e:
         logger.debug(f"Snapshot failed {symbol}: {e}")
@@ -191,6 +209,39 @@ def _fetch_vix():
     except Exception as e:
         logger.warning(f"VIX failed: {e}")
         return None
+
+
+@router.get("/vix")
+def get_vix_fast():
+    """Lightweight VIX endpoint — current value + 7-day channel for sparkline."""
+    try:
+        df = yf.Ticker("^VIX").history(period="10d")
+        if df.empty or len(df) < 2:
+            return {"value": None}
+        closes = [round(float(v), 2) for v in df["Close"].tail(7).tolist()]
+        val    = closes[-1]
+        prev   = closes[-2] if len(closes) > 1 else val
+        change = round((val - prev) / prev * 100, 2)
+        trend_5d = round((closes[-1] - closes[0]) / closes[0] * 100, 2) if len(closes) > 1 else 0
+
+        if   val < 15: label, color = "שאנן מאוד",    "#00c896"
+        elif val < 20: label, color = "שאנן",          "#3b82f6"
+        elif val < 25: label, color = "חוסר וודאות",  "#a78bfa"
+        elif val < 30: label, color = "חרדה",          "#f59e0b"
+        elif val < 40: label, color = "פחד",           "#f97316"
+        else:          label, color = "פחד קיצוני",   "#f04060"
+
+        return {
+            "value":     val,
+            "change_pct": change,
+            "trend_5d":  trend_5d,
+            "channel":   closes,       # 7 days for sparkline
+            "label":     label,
+            "color":     color,
+        }
+    except Exception as e:
+        logger.warning(f"VIX fast failed: {e}")
+        return {"value": None}
 
 
 @router.get("/overview")

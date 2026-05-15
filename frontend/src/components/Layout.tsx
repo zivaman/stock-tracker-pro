@@ -5,12 +5,21 @@ import {
   PanelRight, PanelTop, Settings, Eye, EyeOff, CheckCircle, XCircle, Layers,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { getNotifications, markAllRead, scanPortfolio, getCurrencies, getApiKeyStatus, saveApiKey } from '../api/client';
+import { getNotifications, markAllRead, scanPortfolio, getCurrencies, getApiKeyStatus, saveApiKey, getVix } from '../api/client';
 import { useTheme } from '../ThemeContext';
 import type { Notification } from '../types';
 
 interface CurrencyRates {
   [pair: string]: { rate: number; change_pct: number };
+}
+
+interface VixData {
+  value: number | null;
+  change_pct: number;
+  trend_5d: number;
+  channel: number[];
+  label: string;
+  color: string;
 }
 
 const CACHE_KEY_CURRENCIES = 'cache_currencies';
@@ -23,12 +32,59 @@ function saveCache<T>(key: string, data: T) {
   try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
 }
 
+/* ─── VIX Sparkline ─── */
+function VixSparkline({ channel, color }: { channel: number[]; color: string }) {
+  if (!channel || channel.length < 2) return null;
+  const W = 52, H = 18;
+  const min = Math.min(...channel);
+  const max = Math.max(...channel);
+  const range = max - min || 1;
+  const pts = channel.map((v, i) => {
+    const x = (i / (channel.length - 1)) * W;
+    const y = H - ((v - min) / range) * H;
+    return `${x},${y}`;
+  }).join(' ');
+  return (
+    <svg width={W} height={H} style={{ display: 'block', opacity: 0.9 }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /* ─── Currency Ticker ─── */
-function CurrencyTicker({ currencies }: { currencies: CurrencyRates }) {
+function CurrencyTicker({ currencies, vix }: { currencies: CurrencyRates; vix: VixData | null }) {
   const entries = Object.entries(currencies);
-  if (entries.length === 0) return null;
   return (
     <div className="currency-bar">
+      {/* ── VIX block ── */}
+      {vix && vix.value != null && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          borderRight: '1px solid rgba(255,255,255,0.08)',
+          paddingRight: 10, marginRight: 4,
+        }}>
+          <span style={{ fontSize: '.62rem', color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.04em' }}>VIX</span>
+          <span style={{ fontFamily: 'monospace', fontWeight: 900, fontSize: '.78rem', color: vix.color }}>
+            {vix.value.toFixed(2)}
+          </span>
+          <span style={{ fontSize: '.6rem', color: vix.change_pct >= 0 ? '#f97316' : '#00c896', fontFamily: 'monospace' }}>
+            {vix.change_pct >= 0 ? '▲' : '▼'}{Math.abs(vix.change_pct).toFixed(1)}%
+          </span>
+          <VixSparkline channel={vix.channel} color={vix.color} />
+          <span style={{
+            fontSize: '.58rem', color: vix.color,
+            background: `${vix.color}18`, border: `1px solid ${vix.color}40`,
+            borderRadius: 4, padding: '1px 5px', fontWeight: 700,
+          }}>
+            {vix.label}
+          </span>
+          {/* 5-day channel direction */}
+          <span style={{ fontSize: '.6rem', color: vix.trend_5d >= 0 ? '#f97316' : '#00c896', fontWeight: 700 }}>
+            {vix.trend_5d >= 0 ? '📈' : '📉'} {vix.trend_5d >= 0 ? '+' : ''}{vix.trend_5d.toFixed(1)}% שבוע
+          </span>
+        </div>
+      )}
+
       <span className="currency-label">
         <DollarSign size={10} /> שערי מטבע
       </span>
@@ -437,6 +493,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
   const [scanning, setScanning] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [vix, setVix] = useState<VixData | null>(null);
   const [navSide, setNavSide] = useState<'top' | 'right'>(
     () => (localStorage.getItem(NAV_SIDE_KEY) as 'top' | 'right') ?? 'top'
   );
@@ -460,12 +517,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         .then(d => { const r = d.rates || {}; setCurrencies(r); saveCache(CACHE_KEY_CURRENCIES, r); })
         .catch(() => {});
 
+    const loadVix = () =>
+      getVix().then(d => { if (d?.value != null) setVix(d); }).catch(() => {});
+
     loadNotifs();
     loadCurrencies();
+    loadVix();
 
     const i1 = setInterval(loadNotifs, 60_000);
     const i2 = setInterval(loadCurrencies, 300_000);
-    return () => { clearInterval(i1); clearInterval(i2); };
+    const i3 = setInterval(loadVix, 300_000);
+    return () => { clearInterval(i1); clearInterval(i2); clearInterval(i3); };
   }, []);
 
   const handleScan = async () => {
@@ -492,7 +554,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       />
       {showSettings && <ApiKeyModal onClose={() => setShowSettings(false)} />}
       <div className="below-nav">
-        <CurrencyTicker currencies={currencies} />
+        <CurrencyTicker currencies={currencies} vix={vix} />
         <main className="main-content">
           {children}
         </main>

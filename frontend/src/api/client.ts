@@ -70,6 +70,9 @@ export const getIntradayData = (symbol: string, interval: '15m' | '30m' | '1h') 
 // Market overview
 export const getMarketOverview = () => api.get('/market/overview').then(r => r.data);
 
+// VIX fast endpoint
+export const getVix = () => api.get('/market/vix', { timeout: 12000 }).then(r => r.data);
+
 // AI Insights (Claude-powered, with prompt caching)
 export const getAIInsights = (data: {
   symbol: string; name: string; current_price: number;
