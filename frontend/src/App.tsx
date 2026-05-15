@@ -8,6 +8,7 @@ import ZivIndex from './pages/ZivIndex';
 import Search from './pages/Search';
 import IndicatorsGuide from './pages/IndicatorsGuide';
 import MarketDashboard from './pages/MarketDashboard';
+import SectorDashboard from './pages/SectorDashboard';
 import ChartPage from './pages/ChartPage';
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
                 <Route path="/search" element={<Search />} />
                 <Route path="/indicators" element={<IndicatorsGuide />} />
                 <Route path="/market" element={<MarketDashboard />} />
+                <Route path="/sectors" element={<SectorDashboard />} />
               </Routes>
             </Layout>
           } />

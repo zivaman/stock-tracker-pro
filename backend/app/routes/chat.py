@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
-import anthropic
+import requests as _requests
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -162,46 +162,57 @@ SYSTEM_PROMPT_TEMPLATE = """אתה אנליסט פיננסי מקצועי ומנ
 """
 
 
+def _call_gemini(api_key: str, system: str, history: list, question: str) -> str:
+    """Call Gemini 1.5 Flash via REST API."""
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-2.5-flash-lite:generateContent?key={api_key}"
+    )
+
+    # Build contents list (history + current question)
+    contents = []
+    for msg in history[-16:]:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": question}]})
+
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": 1500,
+            "temperature": 0.7,
+        },
+    }
+
+    resp = _requests.post(url, json=payload, timeout=30)
+    if resp.status_code != 200:
+        err = resp.json().get("error", {}).get("message", resp.text)
+        raise ValueError(err)
+
+    data = resp.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"]
+
+
 @router.post("")
 def chat_with_stock(req: ChatRequest):
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail="ANTHROPIC_API_KEY לא מוגדר בסביבה."
+            detail="GEMINI_API_KEY לא מוגדר. הוסף אותו לקובץ .env"
         )
 
-    client = anthropic.Anthropic(api_key=api_key)
-
     context_str = build_context_str(req.symbol, req.context_data or {})
-
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
         symbol=req.symbol,
         context=context_str,
     )
 
-    # Build message history (last 16 for richer conversation)
-    messages = []
-    for msg in (req.history or [])[-16:]:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": req.question})
+    history = [{"role": m.role, "content": m.content} for m in (req.history or [])]
 
     try:
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1500,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"},  # prompt caching
-                }
-            ],
-            messages=messages,
-        )
-        answer = response.content[0].text
+        answer = _call_gemini(api_key, system_prompt, history, req.question)
         return {"answer": answer, "symbol": req.symbol}
-    except anthropic.AuthenticationError:
-        raise HTTPException(status_code=401, detail="ANTHROPIC_API_KEY לא תקין")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"שגיאה: {str(e)}")

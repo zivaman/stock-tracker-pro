@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   TrendingUp, Bell, Sun, Moon, ScanLine, DollarSign,
   Briefcase, Radar, BarChart2, Search, BookOpen, Globe,
-  PanelRight, PanelTop, Settings, Eye, EyeOff, CheckCircle, XCircle,
+  PanelRight, PanelTop, Settings, Eye, EyeOff, CheckCircle, XCircle, Layers,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getNotifications, markAllRead, scanPortfolio, getCurrencies, getApiKeyStatus, saveApiKey } from '../api/client';
@@ -347,6 +347,10 @@ function Navbar({ notifications, onScan, scanning, navSide, toggleNavSide, onOpe
         <NavLink to="/market" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <Globe size={15} />
           <span>שוק כללי</span>
+        </NavLink>
+        <NavLink to="/sectors" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <Layers size={15} />
+          <span>סקטורים</span>
         </NavLink>
       </div>
 
